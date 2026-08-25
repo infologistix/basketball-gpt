@@ -104,7 +104,7 @@
   },
   {
     "question": "How many rows are in each bronze table?",
-    "sql": "SELECT table_schema, table_name\nFROM information_schema.tables\nWHERE table_schema = 'bronze' AND table_type = 'BASE TABLE'\nORDER BY table_name",
+    "sql": "SELECT 'b_bbl_boxscore' AS table_name, COUNT(*) AS row_count FROM bronze.b_bbl_boxscore\nUNION ALL SELECT 'b_bbl_playbyplay', COUNT(*) FROM bronze.b_bbl_playbyplay\nUNION ALL SELECT 'b_bbl_player_info', COUNT(*) FROM bronze.b_bbl_player_info\nUNION ALL SELECT 'b_bbl_team_image', COUNT(*) FROM bronze.b_bbl_team_image\nUNION ALL SELECT 'b_bbl_wurfposition', COUNT(*) FROM bronze.b_bbl_wurfposition\nUNION ALL SELECT 'b_cl_boxscore', COUNT(*) FROM bronze.b_cl_boxscore\nUNION ALL SELECT 'b_cl_hist_links', COUNT(*) FROM bronze.b_cl_hist_links\nUNION ALL SELECT 'b_cl_playbyplay', COUNT(*) FROM bronze.b_cl_playbyplay\nUNION ALL SELECT 'b_cl_player_info', COUNT(*) FROM bronze.b_cl_player_info\nUNION ALL SELECT 'b_cl_player_info_alt', COUNT(*) FROM bronze.b_cl_player_info_alt\nUNION ALL SELECT 'b_cl_player_info_test', COUNT(*) FROM bronze.b_cl_player_info_test\nUNION ALL SELECT 'b_ec_boxscore', COUNT(*) FROM bronze.b_ec_boxscore\nUNION ALL SELECT 'b_ec_playbyplay', COUNT(*) FROM bronze.b_ec_playbyplay\nUNION ALL SELECT 'b_ec_player_info', COUNT(*) FROM bronze.b_ec_player_info\nUNION ALL SELECT 'b_el_boxscore', COUNT(*) FROM bronze.b_el_boxscore\nUNION ALL SELECT 'b_el_playbyplay', COUNT(*) FROM bronze.b_el_playbyplay\nUNION ALL SELECT 'b_el_player_info', COUNT(*) FROM bronze.b_el_player_info\nUNION ALL SELECT 'b_el_wurfposition', COUNT(*) FROM bronze.b_el_wurfposition\nORDER BY table_name",
     "tables": [
       "bronze"
     ],
@@ -112,9 +112,14 @@
       "row",
       "count",
       "metadata",
-      "bronze"
+      "bronze",
+      "compare",
+      "euroleague",
+      "eurocup",
+      "bbl",
+      "champions league"
     ],
-    "doc": "Dynamic per-table row counts need generated SQL or deterministic app helpers because table names cannot be parameterized as values."
+    "doc": "Table names cannot be parameterized as SQL values, so a single grouped query can't compute per-table row counts. The fix is a UNION ALL with one SELECT 'literal_table_name', COUNT(*) FROM schema.table_name per table, listing each table explicitly by name - this is real, executable SQL, not a limitation to explain away. Use this same technique for 'compare row counts across EuroLeague/EuroCup/BBL/Champions League' style questions too: filter the UNION ALL to just the b_el_/b_ec_/b_bbl_/b_cl_ tables the question asks about, verified working against the live database with real row counts."
   },
   {
     "question": "Which players have the most rows in bronze.b_el_boxscore?",

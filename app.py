@@ -25,12 +25,10 @@ AUTO_CREATE_SCHEMAS = os.getenv("NBA_AUTO_CREATE_SCHEMAS", "false").lower() in {
 
 STARTER_QUESTIONS = [
     "List me all tables",
-    "How many rows are in each bronze table?",
     "Show 20 sample rows from bronze.b_el_boxscore",
     "Draw a bar chart of total pts by player_name from b_el_boxscore, top 20, sort descending",
     "Which players have the most rows in b_el_boxscore?",
     "Show me the columns in b_el_playbyplay",
-    "Compare row counts across EuroLeague, EuroCup, BBL, and Champions League tables",
 ]
 
 
@@ -170,7 +168,10 @@ def render_schema_browser() -> None:
         hide_index=True,
         use_container_width=True,
         column_config={
-            "table": st.column_config.TextColumn("table", width="medium"),
+            # "medium" pushed rows/cols off-screen in a narrow sidebar - table
+            # names are long (e.g. bronze.b_cl_player_info_test) but TextColumn
+            # already ellipsis-truncates on overflow, so "small" here is safe.
+            "table": st.column_config.TextColumn("table", width="small"),
             "rows": st.column_config.NumberColumn("rows", width="small"),
             "cols": st.column_config.NumberColumn("cols", width="small"),
         },
