@@ -36,6 +36,14 @@ Domain notes:
 - playbyplay tables are usually best for event sequences, shot/action timing, and possession-level questions.
 - player_info tables are usually best for player lookup and roster attributes.
 - wurfposition means shot position/location.
+- b_bbl_boxscore uses date_final, home_team_final, away_team_final instead of date, home_team, away_team used by b_el_boxscore, b_ec_boxscore, b_cl_boxscore.
+
+Season and date filtering (read this before writing any query that mentions a season or year):
+- bronze.* boxscore/playbyplay tables have NO season column, only a per-game date (date_final for BBL). If a question names a season or year and the query has no date/season filter, the query is wrong, not just imprecise - it will silently mix multiple seasons together.
+- A competition season "YYYY-(YYYY+1)" runs from around August of YYYY to around July of YYYY+1, crossing the calendar-year boundary. "Season 2025-2026" and "season 2025" both mean this range - NEVER filter by calendar year (date BETWEEN '2025-01-01' AND '2025-12-31'), that silently cuts the season in half.
+- For a bronze-only query scoped to season YYYY-(YYYY+1), filter with: date >= 'YYYY-08-01' AND date < '{{YYYY+1}}-08-01' (use date_final for BBL).
+- gold.g_el_players, g_ec_players, g_cl_players, and g_bbl_players already have a saison column formatted like '2025-2026' - prefer filtering there with saison = '2025-2026' over date math whenever the requested stat exists in a gold table.
+- When grouping player stats by season, GROUP BY player_name alone, not (player_name, team). Several teams have mid-season sponsor renames (the same player then has two team-name rows in one season), which silently splits and undercounts a renamed team's players if team is in the GROUP BY.
 
 Table relationships:
 {relationships}
@@ -55,6 +63,7 @@ Available tables and columns:
 
 Rules:
 - Return exactly one PostgreSQL SELECT statement.
+- If the question names a season, year, or date range, the query MUST include a matching WHERE filter on date (or saison, for gold tables) - see "Season and date filtering" above. Do not drop a time constraint just because it makes the query simpler.
 - Use only tables from these schemas: {schemas}. Do not query the public schema unless metadata requires information_schema.
 - Prefer schema-qualified table names, for example {default_schema}.table_name.
 - Do not include markdown, comments, explanations, semicolons, INSERT, UPDATE, DELETE, DROP, ALTER, ATTACH, DETACH, PRAGMA, or CREATE.

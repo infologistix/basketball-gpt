@@ -129,5 +129,21 @@
       "rows"
     ],
     "doc": "Use COUNT(*) for row-frequency questions, not SUM(pts)."
+  },
+  {
+    "question": "Who made the most three-pointers in EuroLeague season 2025-2026?",
+    "sql": "SELECT player_name, SUM(three_p) AS threes_made\nFROM bronze.b_el_boxscore\nWHERE date >= '2025-08-01' AND date < '2026-08-01'\nGROUP BY player_name\nORDER BY threes_made DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "season",
+      "2025-2026",
+      "three_p",
+      "date",
+      "euroleague",
+      "eurocup"
+    ],
+    "doc": "bronze tables have no season column, only date - a query for a named season MUST filter date to that season's range (August of the first year through July of the next, since the competition year crosses the calendar year boundary) or it silently mixes every season together. GROUP BY player_name alone, not (player_name, player_team): mid-season sponsor renames give the same player two team-name rows in one season."
   }
 ]
