@@ -1,6 +1,6 @@
 streamlit==1.39.0
 google-generativeai==0.8.3
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 psycopg[binary]==3.2.3
 
 # Imported directly by app.py. They arrive as transitive streamlit deps today, but
