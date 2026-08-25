@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nba}
+      POSTGRES_USER: ${POSTGRES_USER:-nba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nba}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nba} -d ${POSTGRES_DB:-nba}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./knowledge:/app/knowledge
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://ollama.com/api}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3-coder:480b-cloud}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nba}:${POSTGRES_PASSWORD:-nba}@db:5432/${POSTGRES_DB:-nba}
+      NBA_DB_SCHEMA: ${NBA_DB_SCHEMA:-bronze}
+      NBA_DB_SCHEMAS: ${NBA_DB_SCHEMAS:-bronze,silver,gold}
+      NBA_AUTO_CREATE_SCHEMAS: ${NBA_AUTO_CREATE_SCHEMAS:-false}
+      SQL_RAG_ENABLED: ${SQL_RAG_ENABLED:-true}
+      SQL_RAG_MAX_EXAMPLES: ${SQL_RAG_MAX_EXAMPLES:-4}
+      MAX_QUERY_ROWS: ${MAX_QUERY_ROWS:-5000}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

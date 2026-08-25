@@ -1,0 +1,9 @@
+streamlit==1.39.0
+google-generativeai==0.8.3
+python-dotenv==1.0.1
+psycopg[binary]==3.2.3
+
+# Imported directly by app.py. They arrive as transitive streamlit deps today, but
+# pin them explicitly so a future streamlit bump cannot silently change or drop them.
+altair==5.4.1
+pandas==2.2.3

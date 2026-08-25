@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.env
+nba.db
+.streamlit/
+.venv/
+venv/
+.DS_Store
+.docker-build-config/
+docs/
+
+# Database dumps: ~26 MB each, would need LFS. Already excluded from the build
+# context by .dockerignore; keep them out of git too.
+sql_dumps/*.gz

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+nba.db
+.streamlit/
+.venv/
+venv/
+docs/
+.DS_Store
+.docker-build-config/
+sql_dumps/*.gz
