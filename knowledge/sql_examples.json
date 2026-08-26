@@ -150,5 +150,81 @@
       "eurocup"
     ],
     "doc": "bronze tables have no season column, only date - a query for a named season MUST filter date to that season's range (August of the first year through July of the next, since the competition year crosses the calendar year boundary) or it silently mixes every season together. GROUP BY player_name alone, not (player_name, player_team): mid-season sponsor renames give the same player two team-name rows in one season."
+  },
+  {
+    "question": "Which EuroCup team scored the most total points this season?",
+    "sql": "WITH normalized AS (\n  SELECT CASE home_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE home_team\n         END AS team,\n         link, MAX(home_team_total_point) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY home_team, link\n  UNION ALL\n  SELECT CASE away_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE away_team\n         END AS team,\n         link, MAX(away_team_total_point) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY away_team, link\n)\nSELECT team, SUM(pts) AS total_pts\nFROM normalized\nGROUP BY team\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "team",
+      "points",
+      "total",
+      "rank",
+      "top",
+      "eurocup",
+      "euroleague",
+      "rename",
+      "sponsor"
+    ],
+    "doc": "TWO separate required steps, both load-bearing - dropping either one silently corrupts the answer: (1) home_team_total_point/away_team_total_point repeat on every player row of a game (~23-24 rows per team per game, all identical) - you MUST collapse to one row per team-game first via GROUP BY team, link and MAX(...), never SUM the raw per-player rows directly, or the total overcounts by roughly the roster size (verified: 2073 correct vs 48556 when this step is dropped, a 23x error). (2) Team-level aggregation must ALSO normalize mid-season sponsor-renamed team names to one canonical name via CASE WHEN before grouping, or a renamed team's points silently split across two rows and it drops out of the ranking entirely (verified: HAPOEL MIDTOWN JERUSALEM never appears in the EuroCup top 10 without this; correctly ranks 6th at 1810 combined points with it). Both steps are independent of each other - do not skip the MAX(...) dedup just because a question does not mention renamed teams."
+  },
+  {
+    "question": "Which BBL team scored the most total points in the 2024-25 season?",
+    "sql": "SELECT team, SUM(pts) AS total_pts, COUNT(*) AS games\nFROM (\n  SELECT home_team AS team, home_team_total_point AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-08-01' AND date < '2025-08-01'\n  UNION ALL\n  SELECT away_team AS team, away_team_total_point AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-08-01' AND date < '2025-08-01'\n) sub\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "silver.s_bbl_ptstotal"
+    ],
+    "tags": [
+      "team",
+      "points",
+      "total",
+      "rank",
+      "top",
+      "bottom",
+      "average",
+      "bbl",
+      "bundesliga",
+      "cup",
+      "phantom"
+    ],
+    "doc": "BBL team-level aggregation must exclude ProA cup opponents with HAVING COUNT(*) > 2 on the team-game grouping, or 6-7 phantom cup-opponent teams (each with only 1-2 games all season) get counted alongside the ~17-18 real Bundesliga teams - verified against live data: 24 raw team names drop to 17 real ones after filtering. Never changes who ranks #1 (phantom teams have tiny totals from so few games) but corrupts team counts, bottom-N rankings, and any per-team average."
+  },
+  {
+    "question": "What is the average three-point shooting percentage for players in the Champions League 2024-25 season, minimum 50 attempts?",
+    "sql": "WITH qualifying AS (\n  SELECT player_name, SUM(three_pa) AS attempts, SUM(three_p) AS made\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2024-08-01' AND date < '2025-08-01'\n  GROUP BY player_name\n  HAVING SUM(three_pa) >= 50\n)\nSELECT SUM(made) * 100.0 / SUM(attempts) AS avg_three_p_pct, COUNT(*) AS qualifying_players\nFROM qualifying",
+    "tables": [
+      "bronze.b_cl_boxscore"
+    ],
+    "tags": [
+      "average",
+      "mean",
+      "percentage",
+      "three point",
+      "shooting",
+      "minimum",
+      "attempts",
+      "champions league"
+    ],
+    "doc": "An 'average X, minimum N attempts' question needs a TWO-LEVEL aggregate, not a leaderboard: first collapse to one row per player-season with GROUP BY player_name and HAVING SUM(attempts) >= N (N is a season total, never a per-row WHERE filter - a single game essentially never has 50 three-point attempts, so WHERE three_pa >= 50 silently returns zero rows), then aggregate that qualifying set into the final single number. Do not answer with ORDER BY pct DESC LIMIT 20 and let the summary step average the returned rows - verified against live data: the true average across all 47 qualifying players is 37.4%, but averaging only the top 20 by percentage gives a biased 43.6%."
+  },
+  {
+    "question": "What was Real Madrid's win-loss record in the EuroLeague 2025-26 season?",
+    "sql": "WITH deduped AS (\n  SELECT link, home_team, away_team, MAX(home_team_total_point) AS home_pts, MAX(away_team_total_point) AS away_pts\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY link, home_team, away_team\n),\nreoriented AS (\n  SELECT home_team AS team, home_pts AS team_pts, away_pts AS opp_pts FROM deduped\n  UNION ALL\n  SELECT away_team AS team, away_pts AS team_pts, home_pts AS opp_pts FROM deduped\n)\nSELECT\n  COUNT(*) AS games_played,\n  SUM(CASE WHEN team_pts > opp_pts THEN 1 ELSE 0 END) AS wins,\n  SUM(CASE WHEN team_pts < opp_pts THEN 1 ELSE 0 END) AS losses\nFROM reoriented\nWHERE team ILIKE '%REAL MADRID%'",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "record",
+      "win",
+      "wins",
+      "loss",
+      "losses",
+      "win-loss",
+      "w-l",
+      "season"
+    ],
+    "doc": "A team's win-loss record needs the UNION ALL reorientation pattern (one row per team-game, deduplicated first per the boxscore-duplication note) with BOTH branches relabeled to team_pts/opp_pts before comparing - never keep raw home_pts/away_pts columns after the UNION and compare those directly, and never write a CASE that only checks the home-team win condition. Both mistakes silently drop every away game for the target team. Verified against live data: a query checking only 'home_team ILIKE team AND home_pts > away_pts' reported Real Madrid 35-9 for the full season; the real record, from this correctly reoriented query, is 28-16 - a materially different, wrong record, not just an imprecise one. This mistake recurs often even when the lesson has been taught before - double-check every win-loss query against this exact pattern rather than improvising a new one."
   }
 ]
