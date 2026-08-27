@@ -5,6 +5,7 @@ import re
 import json
 import urllib.error
 import urllib.request
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -28,9 +29,20 @@ MAX_QUERY_ROWS = int(os.getenv("MAX_QUERY_ROWS", "5000"))
 SCHEMA_PROMPT_TEMPLATE = """
 You are writing PostgreSQL SELECT queries for a basketball analytics database.
 
+Today's date is {today}.
+
 Schemas: {schemas}
 
 Domain notes:
+- CRITICAL: resolve relative season words against today's date above, and remember a
+  season is named for the two calendar years it spans (Aug of the first year to Jul of
+  the second). "Last season" / "letzte Saison" means the most recently COMPLETED season,
+  which is NOT simply "today's year minus one": on 2026-08-27 the 2025-2026 season ended
+  in June 2026 and the 2026-2027 season has barely started, so "last season" is
+  2025-2026 (date >= '2025-08-01' AND date < '2026-08-01'), not 2024-2025. Likewise
+  "this season" means the season currently in progress, and "the last N seasons" counts
+  back from the most recently completed one. If a question names a season explicitly
+  ("2024-25", "season 2024"), use that instead and ignore today's date.
 - Table prefixes indicate competitions: b_el = EuroLeague, b_ec = EuroCup, b_cl = Champions League, b_bbl = Basketball Bundesliga.
 - boxscore tables are usually best for player/team game totals and rankings.
 - CRITICAL: in b_el_boxscore, b_ec_boxscore, b_cl_boxscore, AND the corresponding *_playbyplay tables (b_el_playbyplay, b_ec_playbyplay, b_cl_playbyplay), home_team_total_point and away_team_total_point are repeated on EVERY row of that game - one row per player in boxscore (~23-24 rows per team per game), one row per EVENT in playbyplay (can be 500+ rows per game) - all carrying the identical team-total value. Summing these columns per row overcounts a team's points by roughly the roster size (boxscore) or the event count (playbyplay, far worse). This is independent of and more fundamental than any team-name-rename issue below: before summing a team's points across games, ALWAYS collapse to one row per team-game first (e.g. GROUP BY team, link and take MAX(home_team_total_point)/MAX(away_team_total_point), or an equivalent dedup), THEN sum across games. Never write "SUM(home_team_total_point) ... UNION ALL ..." directly against the raw per-player or per-event rows.
@@ -448,6 +460,9 @@ def get_schema_prompt(db_path: str | None = None) -> str:
 
     relationships = build_relationship_notes(rows)
     return SCHEMA_PROMPT_TEMPLATE.format(
+        # Resolved per request, not at import - a long-running pod would otherwise
+        # keep answering "last season" against the date it happened to start on.
+        today=date.today().isoformat(),
         schemas=", ".join(schemas),
         default_schema=default_schema,
         relationships=relationships,
