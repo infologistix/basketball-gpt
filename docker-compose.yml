@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-nba}
-      POSTGRES_USER: ${POSTGRES_USER:-nba}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nba}
+      POSTGRES_DB: ${POSTGRES_DB:-basketballgpt}
+      POSTGRES_USER: ${POSTGRES_USER:-basketballgpt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-basketballgpt}
     ports:
       - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nba} -d ${POSTGRES_DB:-nba}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-basketballgpt} -d ${POSTGRES_DB:-basketballgpt}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -29,7 +29,7 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-nba}:${POSTGRES_PASSWORD:-nba}@db:5432/${POSTGRES_DB:-nba}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-basketballgpt}:${POSTGRES_PASSWORD:-basketballgpt}@db:5432/${POSTGRES_DB:-basketballgpt}
       NBA_DB_SCHEMA: ${NBA_DB_SCHEMA:-bronze}
       NBA_DB_SCHEMAS: ${NBA_DB_SCHEMAS:-bronze,silver,gold}
       NBA_AUTO_CREATE_SCHEMAS: ${NBA_AUTO_CREATE_SCHEMAS:-false}

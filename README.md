@@ -28,11 +28,11 @@ cp .env.example .env
 Default local PostgreSQL settings:
 
 ```bash
-POSTGRES_DB=nba
-POSTGRES_USER=nba
-POSTGRES_PASSWORD=nba
+POSTGRES_DB=basketballgpt
+POSTGRES_USER=basketballgpt
+POSTGRES_PASSWORD=basketballgpt
 POSTGRES_PORT=55432
-DATABASE_URL=postgresql://nba:nba@localhost:55432/nba
+DATABASE_URL=postgresql://basketballgpt:basketballgpt@localhost:55432/basketballgpt
 NBA_DB_SCHEMAS=bronze,silver,gold
 ```
 

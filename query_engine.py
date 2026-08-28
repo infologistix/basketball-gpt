@@ -648,7 +648,7 @@ def execute_sql(sql: str, db_path: str | None = None) -> list[dict[str, Any]]:
     except PostgresError as exc:
         message = str(exc).strip() or exc.__class__.__name__
         if "connection" in message.lower():
-            raise QueryEngineError("NBA Postgres database was not reachable. Start local Postgres first.") from exc
+            raise QueryEngineError("Postgres database was not reachable. Start local Postgres first.") from exc
         raise QueryEngineError(f"PostgreSQL error: {message}") from exc
     if len(rows) > MAX_QUERY_ROWS:
         raise QueryEngineError(

@@ -13,7 +13,7 @@ from psycopg import sql
 
 DEFAULT_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://nba:nba@localhost:5432/nba",
+    "postgresql://basketballgpt:basketballgpt@localhost:5432/basketballgpt",
 )
 DEFAULT_SCHEMA = os.getenv("NBA_DB_SCHEMA", "bronze")
 DEFAULT_SCHEMAS = os.getenv("NBA_DB_SCHEMAS", DEFAULT_SCHEMA)

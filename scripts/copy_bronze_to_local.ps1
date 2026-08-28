@@ -11,7 +11,7 @@ if (-not $SourceDatabaseUrl) {
 }
 
 if (-not $TargetDatabaseUrl) {
-    $TargetDatabaseUrl = "postgresql://nba:nba@localhost:55432/nba"
+    $TargetDatabaseUrl = "postgresql://basketballgpt:basketballgpt@localhost:55432/basketballgpt"
 }
 
 if ($SourceSchema -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {

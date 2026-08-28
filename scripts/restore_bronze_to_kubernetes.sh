@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOCAL_DATABASE_URL="${LOCAL_DATABASE_URL:-postgresql://nba:nba@db:5432/nba}"
+LOCAL_DATABASE_URL="${LOCAL_DATABASE_URL:-postgresql://basketballgpt:basketballgpt@db:5432/basketballgpt}"
 LOCAL_DOCKER_NETWORK="${LOCAL_DOCKER_NETWORK:-basketballcrawler_default}"
 K8S_DATABASE_URL="${K8S_DATABASE_URL:-}"
 K8S_PGPASSWORD="${K8S_PGPASSWORD:-}"

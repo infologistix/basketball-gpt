@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"
-DATABASE_URL="${DATABASE_URL:-postgresql://nba:nba@localhost:55432/nba}"
+DATABASE_URL="${DATABASE_URL:-postgresql://basketballgpt:basketballgpt@localhost:55432/basketballgpt}"
 SOURCE_DB_SCHEMA="${SOURCE_DB_SCHEMA:-bronze}"
 
 if [[ -z "$SOURCE_DATABASE_URL" ]]; then
