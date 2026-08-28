@@ -39,6 +39,55 @@ STARTER_QUESTIONS = [
 ]
 
 
+# Chart palette, kept in step with .streamlit/config.toml. Vega's defaults are a
+# light blue on a white plot area, which is why untouched charts looked pasted
+# onto the page rather than part of it.
+CHART_FONT = "IBM Plex Sans, Segoe UI, system-ui, sans-serif"
+CHART_ACCENT = "#E07A46"
+CHART_TEXT = "#EFEAE3"
+CHART_MUTED = "#A69F95"
+CHART_GRID = "#2B261F"
+
+
+def style_chart(chart: alt.Chart) -> alt.Chart:
+    """Apply the app's palette and typography to a chart.
+
+    Called once per chart right before rendering, so all four chart types share
+    one definition instead of repeating configure_* calls in each builder.
+    """
+    return (
+        chart.configure(background="transparent")
+        .configure_view(stroke=None)
+        .configure_axis(
+            labelFont=CHART_FONT,
+            titleFont=CHART_FONT,
+            labelColor=CHART_MUTED,
+            titleColor=CHART_MUTED,
+            labelFontSize=13,
+            titleFontSize=13,
+            titleFontWeight="normal",
+            titlePadding=10,
+            gridColor=CHART_GRID,
+            domainColor=CHART_GRID,
+            tickColor=CHART_GRID,
+        )
+        .configure_title(
+            font=CHART_FONT,
+            fontSize=16,
+            fontWeight=500,
+            color=CHART_TEXT,
+            anchor="start",
+            offset=14,
+        )
+        .configure_legend(
+            labelFont=CHART_FONT,
+            titleFont=CHART_FONT,
+            labelColor=CHART_MUTED,
+            titleColor=CHART_MUTED,
+        )
+    )
+
+
 # Only the tab captions are translated. The keys stay English because they are
 # also what requested_chart_name() returns and what prioritize_chart_options()
 # matches on - renaming those would mean touching the matching logic too.
@@ -61,8 +110,24 @@ def inject_styles() -> None:
            SQL need sitting next to prose. */
         @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 
+        /* Streamlit sizes nearly everything in rem off the root, so raising the
+           root size once scales body text, captions, inputs, buttons and their
+           spacing together instead of chasing individual selectors. 16px is the
+           browser default; IBM Plex also runs slightly smaller on the x-height
+           than Streamlit's stock Source Sans, which made the switch read as a
+           size drop. */
+        html {
+            font-size: 17.5px;
+        }
+
         html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
             font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        }
+
+        /* The dataframe grid renders to canvas and does not inherit the root
+           size, so it needs its own step to stay in proportion. */
+        [data-testid="stDataFrame"] {
+            font-size: 0.92rem;
         }
 
         code, pre, [data-testid="stCodeBlock"] * {
@@ -672,7 +737,7 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
     title = f"{humanize_column(value_column)} nach {humanize_column(label_column)}"
     chart = (
         alt.Chart(chart_df)
-        .mark_bar()
+        .mark_bar(color=CHART_ACCENT, cornerRadiusEnd=2)
         .encode(
             x=alt.X(f"{value_column}:Q", title=humanize_column(value_column)),
             y=alt.Y(
@@ -689,7 +754,7 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
         .properties(title=title)
         .properties(height=max(320, min(700, 28 * len(chart_df))))
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(style_chart(chart), use_container_width=True)
 
 
 def humanize_column(column: str) -> str:
@@ -725,7 +790,7 @@ def render_line_chart(df: pd.DataFrame, numeric_columns: list[str]) -> None:
         return
     chart = (
         alt.Chart(chart_df)
-        .mark_line(point=True)
+        .mark_line(color=CHART_ACCENT, strokeWidth=2, point=alt.OverlayMarkDef(color=CHART_ACCENT, size=45))
         .encode(
             x=alt.X(f"{date_column}:T", title=humanize_column(date_column)),
             y=alt.Y(f"{value_column}:Q", title=humanize_column(value_column)),
@@ -736,7 +801,7 @@ def render_line_chart(df: pd.DataFrame, numeric_columns: list[str]) -> None:
         )
         .properties(title=f"{humanize_column(value_column)} über {humanize_column(date_column)}")
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(style_chart(chart), use_container_width=True)
 
 
 def render_scatter_chart(df: pd.DataFrame, numeric_columns: list[str], question: str | None = None) -> None:
@@ -753,7 +818,7 @@ def render_scatter_chart(df: pd.DataFrame, numeric_columns: list[str], question:
         return
     chart = (
         alt.Chart(chart_df)
-        .mark_circle(size=70, opacity=0.7)
+        .mark_circle(color=CHART_ACCENT, size=70, opacity=0.55)
         .encode(
             x=alt.X(f"{x_column}:Q", title=humanize_column(x_column)),
             y=alt.Y(f"{y_column}:Q", title=humanize_column(y_column)),
@@ -764,7 +829,7 @@ def render_scatter_chart(df: pd.DataFrame, numeric_columns: list[str], question:
         )
         .properties(title=f"{humanize_column(y_column)} vs {humanize_column(x_column)}")
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(style_chart(chart), use_container_width=True)
 
 
 def preferred_scatter_columns(question: str | None, numeric_columns: list[str]) -> tuple[str | None, str | None]:
@@ -812,7 +877,7 @@ def render_histogram(df: pd.DataFrame, numeric_columns: list[str]) -> None:
 
     chart = (
         alt.Chart(chart_df)
-        .mark_bar()
+        .mark_bar(color=CHART_ACCENT, cornerRadiusEnd=2)
         .encode(
             x=alt.X(f"{value_column}:Q", bin=alt.Bin(maxbins=30), title=humanize_column(value_column)),
             y=alt.Y("count():Q", title="Rows"),
@@ -823,7 +888,7 @@ def render_histogram(df: pd.DataFrame, numeric_columns: list[str]) -> None:
         )
         .properties(title=f"Distribution of {humanize_column(value_column)}")
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(style_chart(chart), use_container_width=True)
 
 
 def main() -> None:
