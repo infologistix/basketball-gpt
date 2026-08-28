@@ -10,14 +10,24 @@ from pathlib import Path
 from typing import Any
 
 
+LEAGUE_TAGS = frozenset({"euroleague", "eurocup", "bbl", "champions_league"})
 DEFAULT_KNOWLEDGE_PATH = Path(__file__).parent / "knowledge" / "sql_examples.json"
 DEFAULT_REJECTED_PATH = Path(__file__).parent / "knowledge" / "rejected_sql_examples.json"
-TOKEN_PATTERN = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*|\d+")
+# [^\W\d_] is "any unicode letter": keeps umlauts and ß intact. The old
+# [a-zA-Z_] variant split every accented word ("Würzburg" -> "W", "rzburg")
+# and dropped short ones entirely ("für" -> "f", "r", both below the length
+# filter in tokenize()).
+TOKEN_PATTERN = re.compile(r"[^\W\d_]\w*|\d+")
 SQL_TABLE_PATTERN = re.compile(
     r"\b(?:from|join)\s+(?:(?:only)\s+)?\"?([a-zA-Z_][\w]*)\"?\.\"?([a-zA-Z_][\w]*)\"?",
     re.IGNORECASE,
 )
+# Scoring is plain token overlap, so any word left in here counts as evidence.
+# German function words used to score: a question like "Aus welchen Ländern
+# kamen die meisten Punkte in der Champions-League-Saison" matched four
+# examples from other leagues purely on "die/der/meisten/punkte/saison".
 STOP_WORDS = {
+    # English
     "a",
     "an",
     "and",
@@ -37,6 +47,57 @@ STOP_WORDS = {
     "the",
     "to",
     "with",
+    # German
+    "als",
+    "am",
+    "auf",
+    "aus",
+    "bei",
+    "das",
+    "dem",
+    "den",
+    "der",
+    "des",
+    "die",
+    "ein",
+    "eine",
+    "einem",
+    "einen",
+    "einer",
+    "es",
+    "für",
+    "gab",
+    "geben",
+    "gib",
+    "hat",
+    "hatte",
+    "hatten",
+    "ich",
+    "ist",
+    "im",
+    "meisten",
+    "mir",
+    "mit",
+    "nach",
+    "pro",
+    "sind",
+    "und",
+    "von",
+    "vom",
+    "war",
+    "waren",
+    "was",
+    "welche",
+    "welchem",
+    "welchen",
+    "welcher",
+    "welches",
+    "wer",
+    "wie",
+    "wieviel",
+    "wo",
+    "zeige",
+    "zu",
 }
 
 
@@ -109,7 +170,28 @@ def entry_text(entry: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def score_entry(question_tokens: set[str], entry: dict[str, Any]) -> float:
+def leagues_of(tags: Any) -> set[str]:
+    """Return the league tags carried by a tag list, normalised.
+
+    Curated entries were hand-tagged with "champions league" while infer_tags()
+    emits "champions_league", and "bundesliga" is used interchangeably with
+    "bbl" - normalise both spellings so the two sources can be compared.
+    """
+    aliases = {"bundesliga": "bbl", "championsleague": "champions_league"}
+    found = set()
+    for tag in tags or ():
+        normalised = re.sub(r"[\s-]+", "_", str(tag).strip().lower())
+        normalised = aliases.get(normalised, normalised)
+        if normalised in LEAGUE_TAGS:
+            found.add(normalised)
+    return found
+
+
+def score_entry(
+    question_tokens: set[str],
+    entry: dict[str, Any],
+    question_tags: list[str] | None = None,
+) -> float:
     """Score one entry against a user question using token overlap."""
     if not question_tokens:
         return 0.0
@@ -127,7 +209,20 @@ def score_entry(question_tokens: set[str], entry: dict[str, Any]) -> float:
     coverage = len(overlap) / max(1, len(question_tokens))
     table_boost = sum(2.5 for table in entry.get("tables", []) if str(table).lower() in question_tokens)
     tag_boost = sum(0.75 for tag in entry.get("tags", []) if str(tag).lower() in question_tokens)
-    return rare_token_boost + coverage + table_boost + tag_boost
+    score = rare_token_boost + coverage + table_boost + tag_boost
+
+    # League awareness. Token overlap alone cannot tell competitions apart:
+    # "Punkte", "Saison" and the year appear in every question regardless of
+    # league, so a Champions League question used to retrieve four BBL and
+    # EuroLeague examples and steer the model at the wrong tables.
+    question_leagues = leagues_of(question_tags or ())
+    entry_leagues = leagues_of(entry.get("tags", ()))
+    if question_leagues and entry_leagues:
+        if question_leagues & entry_leagues:
+            score += 2.5
+        else:
+            score *= 0.15
+    return score
 
 
 def retrieve_examples(question: str, limit: int | None = None) -> list[dict[str, Any]]:
@@ -139,8 +234,9 @@ def retrieve_examples(question: str, limit: int | None = None) -> list[dict[str,
         return []
 
     question_tokens = set(tokenize(question))
+    question_tags = infer_tags(question)
     scored_entries = [
-        (score_entry(question_tokens, entry), entry)
+        (score_entry(question_tokens, entry, question_tags), entry)
         for entry in load_entries()
     ]
     ranked = [entry for score, entry in sorted(scored_entries, key=lambda item: item[0], reverse=True) if score > 0]
@@ -152,8 +248,9 @@ def retrieve_rejected_examples(question: str, limit: int = 2) -> list[dict[str, 
     if not rag_enabled() or limit <= 0:
         return []
     question_tokens = set(tokenize(question))
+    question_tags = infer_tags(question)
     scored_entries = [
-        (score_entry(question_tokens, entry), entry)
+        (score_entry(question_tokens, entry, question_tags), entry)
         for entry in load_rejected_entries()
     ]
     ranked = [entry for score, entry in sorted(scored_entries, key=lambda item: item[0], reverse=True) if score > 0]
@@ -270,22 +367,32 @@ def extract_sql_tables(sql: str) -> list[str]:
 
 def infer_tags(question: str) -> list[str]:
     """Infer simple retrieval tags from a user question."""
-    lowered = question.lower()
+    # Hyphens become spaces so "Champions-League-Saison" can match the
+    # "champions league" phrase, and matching is word-bounded: the bare
+    # substring "el" used to tag every German question containing
+    # "welchen"/"viele" as EuroLeague.
+    lowered = re.sub(r"[-‐-―]", " ", question.lower())
     tags = []
     candidates = {
-        "draw": ("draw", "chart", "graph", "plot", "scatter", "histogram"),
-        "schema": ("schema", "column", "columns", "table", "tables"),
-        "sample": ("sample", "preview", "rows"),
-        "points": ("point", "points", "pts", "score"),
+        "draw": (
+            "draw", "chart", "graph", "plot", "scatter", "histogram",
+            "zeichne", "diagramm", "grafik", "schaubild", "verlauf",
+        ),
+        "schema": (
+            "schema", "column", "columns", "table", "tables",
+            "spalte", "spalten", "tabelle", "tabellen",
+        ),
+        "sample": ("sample", "preview", "rows", "beispielzeilen", "zeilen"),
+        "points": ("point", "points", "pts", "score", "punkte", "punkten", "korb"),
         "euroleague": ("euroleague", "el"),
         "eurocup": ("eurocup", "ec"),
         "bbl": ("bbl", "bundesliga"),
-        "champions_league": ("champions league", "cl"),
+        "champions_league": ("champions league", "championsleague", "cl"),
         "silver": ("silver",),
         "gold": ("gold",),
         "bronze": ("bronze",),
     }
     for tag, words in candidates.items():
-        if any(word in lowered for word in words):
+        if any(re.search(rf"\b{re.escape(word)}\b", lowered) for word in words):
             tags.append(tag)
     return tags
