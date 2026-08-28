@@ -20,15 +20,15 @@ from query_engine import MissingApiKeyError, QueryEngineError, UnsafeSqlError, a
 
 load_dotenv()
 
-st.set_page_config(page_title="BasketballGPT", layout="wide")
+st.set_page_config(page_title="BasketballGPT", page_icon="🏀", layout="wide")
 
 AUTO_CREATE_SCHEMAS = os.getenv("NBA_AUTO_CREATE_SCHEMAS", "false").lower() in {"1", "true", "yes"}
 
 # Six, not five, so the three-column grid fills two even rows instead of leaving
 # a gap. Kept to a similar length each: the old set mixed a three-word label with
 # a full sentence, so one button wrapped to two lines and the row went ragged.
-# German because that is the language questions are actually asked in here; the
-# chrome stays English.
+# German, like the rest of the interface - that is the language questions are
+# actually asked in here.
 STARTER_QUESTIONS = [
     "Welche Tabellen gibt es in bronze?",
     "Meiste Rebounds in der BBL-Saison 2025-2026",
@@ -165,7 +165,7 @@ def configured_table_count() -> str:
                 (schemas,),
             ).fetchone()
     except PostgresError:
-        return "Unknown"
+        return "?"
     return str(row[0] if row else 0)
 
 
@@ -175,11 +175,11 @@ def render_schema_browser() -> None:
     try:
         overview = schema_overview(schemas)
     except PostgresError as exc:
-        st.warning(f"Could not read schema metadata: {exc}")
+        st.warning(f"Schema-Metadaten nicht lesbar: {exc}")
         return
 
     if not overview:
-        st.info(f"No tables found in `{', '.join(schemas)}`.")
+        st.info(f"Keine Tabellen in {', '.join(schemas)} gefunden.")
         return
 
     table_rows = [
@@ -195,18 +195,19 @@ def render_schema_browser() -> None:
         hide_index=True,
         use_container_width=True,
         column_config={
-            # "medium" pushed rows/cols off-screen in a narrow sidebar - table
-            # names are long (e.g. bronze.b_cl_player_info_test) but TextColumn
-            # already ellipsis-truncates on overflow, so "small" here is safe.
-            "table": st.column_config.TextColumn("table", width="small"),
-            "rows": st.column_config.NumberColumn("rows", width="small"),
-            "cols": st.column_config.NumberColumn("cols", width="small"),
+            # "small" on the table column truncated the only value that
+            # identifies a row - the sidebar showed "silver.s_cl_p…" while rows
+            # and cols kept full width. The counts are the columns that can
+            # afford to be narrow, so the space goes to the name instead.
+            "table": st.column_config.TextColumn("Tabelle", width="medium"),
+            "rows": st.column_config.NumberColumn("Zeilen", width="small"),
+            "cols": st.column_config.NumberColumn("Sp.", width="small"),
         },
     )
 
     table_options = [f"{item['schema']}.{item['table_name']}" for item in overview]
     selected_table = st.selectbox(
-        "Inspect table",
+        "Tabelle ansehen",
         options=table_options,
     )
     selected = next(item for item in overview if f"{item['schema']}.{item['table_name']}" == selected_table)
@@ -216,34 +217,50 @@ def render_schema_browser() -> None:
 def sidebar() -> dict[str, str | None]:
     """Render sidebar controls and return the selected LLM configuration."""
     with st.sidebar:
-        st.header("BasketballGPT")
-        st.caption("Basketball analytics across bronze, silver, and gold.")
+        # st.header() gives no way to put a mark next to the title, so the
+        # sidebar heading is markup. Drawn rather than an emoji so it inherits
+        # the accent colour and stays crisp at any zoom.
+        st.markdown(
+            """
+            <div style="display:flex;align-items:center;gap:10px;margin:0 0 2px">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                   stroke="#E07A46" stroke-width="1.6" stroke-linecap="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M3 12h18M12 3v18"></path>
+                <path d="M5.6 5.6c3.5 3 3.5 9.8 0 12.8M18.4 5.6c-3.5 3-3.5 9.8 0 12.8"></path>
+              </svg>
+              <span style="font-size:1.35rem;font-weight:600;letter-spacing:-.2px">BasketballGPT</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.caption("Basketball-Analytics über bronze, silver und gold.")
 
         # The full connection string used to sit here, rendered as four lines of
         # inline code - the loudest element on the page for a value nobody reads
         # day to day. What matters at a glance is the database name and how many
         # tables are reachable; the URL moves to the bottom of the sidebar.
-        st.caption(f"{get_database_name()} · {configured_table_count()} tables")
+        st.caption(f"{get_database_name()} · {configured_table_count()} Tabellen")
 
-        with st.expander("Schema Browser", expanded=True):
+        with st.expander("Schema", expanded=True):
             render_schema_browser()
 
         st.divider()
-        st.header("SQL Memory")
+        st.header("SQL-Gedächtnis")
         # Backticks here rendered as inline code, i.e. in the theme's code
         # colour - an accidental highlight on a plain count. Plain text instead,
         # and the two counts side by side so they read as a pair.
         good_column, rejected_column = st.columns(2)
-        good_column.metric("Good", len(load_entries()))
-        rejected_column.metric("Rejected", len(load_rejected_entries()))
+        good_column.metric("Gut", len(load_entries()))
+        rejected_column.metric("Abgelehnt", len(load_rejected_entries()))
         if not rag_enabled():
-            st.caption("Retrieval is disabled (SQL_RAG_ENABLED)")
+            st.caption("Retrieval ist deaktiviert (SQL_RAG_ENABLED)")
 
-        with st.expander("Connection details"):
+        with st.expander("Verbindungsdetails"):
             st.code(get_db_label(), language=None)
 
         st.divider()
-        st.header("LLM")
+        st.header("Modell")
         default_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
         provider_options = ["ollama", "gemini", "openai"]
         # "openai" stays the internal key - it is the LLM_PROVIDER env value, the
@@ -253,7 +270,7 @@ def sidebar() -> dict[str, str | None]:
         provider_labels = {"openai": "KubeSpectra"}
         default_index = provider_options.index(default_provider) if default_provider in provider_options else 0
         provider = st.selectbox(
-            "Provider",
+            "Anbieter",
             options=provider_options,
             index=default_index,
             format_func=lambda value: provider_labels.get(value, value),
@@ -269,29 +286,29 @@ def sidebar() -> dict[str, str | None]:
 
         if provider == "ollama":
             ollama_base_url = st.text_input(
-                "Ollama base URL",
+                "Ollama Basis-URL",
                 value=st.session_state.get(
                     "ollama_base_url",
                     os.getenv("OLLAMA_BASE_URL", "https://ollama.com/api"),
                 ),
             )
             ollama_model = st.text_input(
-                "Ollama model",
+                "Ollama Modell",
                 value=st.session_state.get("ollama_model", os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")),
             )
             ollama_api_key = st.text_input(
-                "Ollama API key",
+                "Ollama API-Key",
                 # Not pre-filled from OLLAMA_API_KEY: this value is rendered to the browser, and on
                 # a shared deployment that would leak the platform's key to anyone who opens the
                 # page. Leave blank to use the server-side env var (still applied in query_engine.py).
                 value=st.session_state.get("ollama_api_key", ""),
                 type="password",
-                help="Only needed for https://ollama.com/api cloud access. Leave blank to use the server-configured key.",
+                help="Nur für den Cloud-Zugang https://ollama.com/api nötig. Leer lassen, um den serverseitigen Key zu nutzen.",
             )
             st.session_state["ollama_base_url"] = ollama_base_url
             st.session_state["ollama_model"] = ollama_model
             st.session_state["ollama_api_key"] = ollama_api_key
-            st.caption("Ollama cloud requires an API key. Local Ollama uses http://host.docker.internal:11434 and no key.")
+            st.caption("Ollama Cloud braucht einen API-Key. Lokales Ollama nutzt http://host.docker.internal:11434 ohne Key.")
             return {
                 **empty_llm_config,
                 "provider": provider,
@@ -302,28 +319,28 @@ def sidebar() -> dict[str, str | None]:
 
         if provider == "openai":
             openai_base_url = st.text_input(
-                "KubeSpectra base URL",
+                "KubeSpectra Basis-URL",
                 value=st.session_state.get(
                     "openai_base_url",
                     os.getenv("OPENAI_BASE_URL", "http://litellm.litellm.svc.cluster.local:4000/v1"),
                 ),
-                help="The in-cluster LiteLLM proxy by default (same one datachat uses).",
+                help="Standardmäßig der Cluster-interne LiteLLM-Proxy (derselbe, den datachat nutzt).",
             )
             openai_model = st.text_input(
-                "KubeSpectra model",
+                "KubeSpectra Modell",
                 value=st.session_state.get("openai_model", os.getenv("OPENAI_MODEL", "qwen3.6-35b-a3b-coder")),
             )
             openai_api_key = st.text_input(
-                "KubeSpectra API key",
+                "KubeSpectra API-Key",
                 # Not pre-filled from OPENAI_API_KEY — see the note on the Ollama key field above.
                 value=st.session_state.get("openai_api_key", ""),
                 type="password",
-                help="A LiteLLM virtual key. Leave blank to use the server-configured key.",
+                help="Ein virtueller LiteLLM-Key. Leer lassen, um den serverseitigen Key zu nutzen.",
             )
             st.session_state["openai_base_url"] = openai_base_url
             st.session_state["openai_model"] = openai_model
             st.session_state["openai_api_key"] = openai_api_key
-            st.caption("Keys are kept in Streamlit session state and are not written to disk.")
+            st.caption("Keys liegen nur in der Streamlit-Session und werden nicht auf Platte geschrieben.")
             return {
                 **empty_llm_config,
                 "provider": provider,
@@ -333,19 +350,19 @@ def sidebar() -> dict[str, str | None]:
             }
 
         gemini_api_key = st.text_input(
-            "Gemini API key",
+            "Gemini API-Key",
             # Not pre-filled from GEMINI_API_KEY — see the note on the Ollama key field above.
             value=st.session_state.get("gemini_api_key", ""),
             type="password",
-            help="Leave blank to use the server-configured key.",
+            help="Leer lassen, um den serverseitigen Key zu nutzen.",
         )
         gemini_model = st.text_input(
-            "Gemini model",
+            "Gemini Modell",
             value=st.session_state.get("gemini_model", os.getenv("GEMINI_MODEL", "gemini-1.5-flash")),
         )
         st.session_state["gemini_api_key"] = gemini_api_key
         st.session_state["gemini_model"] = gemini_model
-        st.caption("Keys are kept in Streamlit session state and are not written to disk.")
+        st.caption("Keys liegen nur in der Streamlit-Session und werden nicht auf Platte geschrieben.")
         return {
             **empty_llm_config,
             "provider": provider,
@@ -382,13 +399,13 @@ def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
     reason_key = f"{key_prefix}_ask_reason"
 
     columns = st.columns([1, 1, 5])
-    if columns[0].button("Save good", key=f"{key_prefix}_save_good", help="Save this question and SQL as a reusable example."):
+    if columns[0].button("Gut", key=f"{key_prefix}_save_good", help="Frage und SQL als wiederverwendbares Beispiel speichern."):
         saved, detail = save_good_example(question=question, sql=sql, answer=message.get("content"))
         if saved:
-            st.success("Saved as a good SQL example.")
+            st.success("Als gutes Beispiel gespeichert.")
         else:
             st.info(detail)
-    if columns[1].button("Mark bad", key=f"{key_prefix}_mark_bad", help="Save this SQL as a rejected pattern for similar questions."):
+    if columns[1].button("Falsch", key=f"{key_prefix}_mark_bad", help="Dieses SQL als Anti-Muster für ähnliche Fragen speichern."):
         st.session_state[reason_key] = True
 
     if not st.session_state.get(reason_key):
@@ -399,12 +416,12 @@ def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
     # to avoid the pattern without learning how to fix it. Require a real one.
     with st.form(key=f"{key_prefix}_reason_form"):
         reason = st.text_input(
-            "Why is this wrong?",
-            placeholder="e.g. missing DISTINCT ON - the join fans out and doubles every total",
+            "Warum ist das falsch?",
+            placeholder="z. B. fehlendes DISTINCT ON – der Join fächert auf und verdoppelt jede Summe",
         )
         form_columns = st.columns([1, 1, 5])
-        confirmed = form_columns[0].form_submit_button("Save")
-        cancelled = form_columns[1].form_submit_button("Cancel")
+        confirmed = form_columns[0].form_submit_button("Speichern")
+        cancelled = form_columns[1].form_submit_button("Abbrechen")
 
     if cancelled:
         st.session_state[reason_key] = False
@@ -412,20 +429,20 @@ def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
     if not confirmed:
         return
     if not reason.strip():
-        st.error("Enter a reason first.")
+        st.error("Bitte zuerst einen Grund angeben.")
         return
 
     saved, detail = save_bad_example(question=question, sql=sql, reason=reason.strip())
     st.session_state[reason_key] = False
     if saved:
-        st.warning("Saved as a rejected SQL example.")
+        st.warning("Als abgelehntes Beispiel gespeichert.")
     else:
         st.info(detail)
 
 
 def render_starter_questions() -> str | None:
     """Render starter question buttons and return the clicked question."""
-    st.caption("Starter questions")
+    st.caption("Beispielfragen")
     cols = st.columns(3)
     for index, question in enumerate(STARTER_QUESTIONS):
         if cols[index % len(cols)].button(question, use_container_width=True):
@@ -453,10 +470,10 @@ def render_result_chart(
     if not numeric_columns:
         return
 
-    with st.expander("Visualizations", expanded=True):
+    with st.expander("Visualisierungen", expanded=True):
         chart_options = prioritize_chart_options(available_chart_options(df), question)
         if not chart_options:
-            st.caption("No compatible chart found for these rows.")
+            st.caption("Kein passendes Diagramm für diese Zeilen.")
             return
 
         tabs = st.tabs(chart_options)
@@ -491,7 +508,7 @@ def render_result_summary(rows: list[dict[str, Any]] | None, intent: str | None 
     date_columns = list(summary_df.select_dtypes(include="datetime").columns)
     text_columns = [column for column in summary_df.columns if column not in numeric_columns + date_columns]
 
-    with st.expander("Result summary", expanded=classify_summary_expanded(intent)):
+    with st.expander("Zusammenfassung", expanded=classify_summary_expanded(intent)):
         metric_cols = st.columns(4)
         metric_cols[0].metric("Rows returned", f"{len(summary_df):,}")
         metric_cols[1].metric("Columns", f"{len(summary_df.columns):,}")
@@ -626,8 +643,8 @@ def requested_chart_name(question: str | None) -> str | None:
 def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql: str | None) -> None:
     """Render a horizontal bar chart with stable sorting and tooltips."""
     label_columns = [column for column in df.columns if column not in numeric_columns]
-    label_column = st.selectbox("Label", label_columns or list(df.columns), key=f"bar_label_{id(df)}")
-    value_column = st.selectbox("Value", numeric_columns, key=f"bar_value_{id(df)}")
+    label_column = st.selectbox("Beschriftung", label_columns or list(df.columns), key=f"bar_label_{id(df)}")
+    value_column = st.selectbox("Wert", numeric_columns, key=f"bar_value_{id(df)}")
     sort_ascending = bar_chart_sort_ascending(generated_sql)
     chart_df = df[[label_column, value_column]].dropna()
     if should_sort_bar_chart(generated_sql, value_column):
@@ -637,7 +654,7 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
         )
     chart_df = chart_df.head(25)
     if chart_df.empty:
-        st.caption("No rows available for a bar chart.")
+        st.caption("Keine Zeilen für ein Balkendiagramm.")
         return
 
     sort_order = "ascending" if sort_ascending else "descending"
@@ -689,11 +706,11 @@ def bar_chart_sort_ascending(generated_sql: str | None) -> bool:
 def render_line_chart(df: pd.DataFrame, numeric_columns: list[str]) -> None:
     """Render a line chart for date/time series results."""
     date_columns = list(df.select_dtypes(include="datetime").columns)
-    date_column = st.selectbox("Date/time", date_columns, key=f"line_date_{id(df)}")
-    value_column = st.selectbox("Value", numeric_columns, key=f"line_value_{id(df)}")
+    date_column = st.selectbox("Datum/Zeit", date_columns, key=f"line_date_{id(df)}")
+    value_column = st.selectbox("Wert", numeric_columns, key=f"line_value_{id(df)}")
     chart_df = df[[date_column, value_column]].dropna().sort_values(date_column).head(500)
     if chart_df.empty:
-        st.caption("No rows available for a line chart.")
+        st.caption("Keine Zeilen für ein Liniendiagramm.")
         return
     chart = (
         alt.Chart(chart_df)
@@ -721,7 +738,7 @@ def render_scatter_chart(df: pd.DataFrame, numeric_columns: list[str], question:
     y_column = st.selectbox("Y", y_candidates, index=y_index, key=f"scatter_y_{id(df)}")
     chart_df = df[[x_column, y_column]].dropna().head(1000)
     if chart_df.empty:
-        st.caption("No rows available for a scatter chart.")
+        st.caption("Keine Zeilen für ein Streudiagramm.")
         return
     chart = (
         alt.Chart(chart_df)
@@ -776,10 +793,10 @@ def match_column_name(requested: str, columns: list[str]) -> str | None:
 
 def render_histogram(df: pd.DataFrame, numeric_columns: list[str]) -> None:
     """Render a histogram for one numeric result column."""
-    value_column = st.selectbox("Value", numeric_columns, key=f"hist_value_{id(df)}")
+    value_column = st.selectbox("Wert", numeric_columns, key=f"hist_value_{id(df)}")
     chart_df = df[[value_column]].dropna().head(5000)
     if chart_df.empty:
-        st.caption("No rows available for a histogram.")
+        st.caption("Keine Zeilen für ein Histogramm.")
         return
 
     chart = (
@@ -805,7 +822,7 @@ def main() -> None:
     llm_config = sidebar()
 
     st.title("BasketballGPT")
-    st.write("Ask questions across bronze, silver, and gold basketball analytics data.")
+    st.write("Stell Fragen zu den Basketball-Daten in bronze, silver und gold.")
 
     if "messages" not in st.session_state:
         st.session_state.messages = [
@@ -815,9 +832,9 @@ def main() -> None:
                 # which broke the sentence into blocks and duplicated what the
                 # starter buttons above already show.
                 "content": (
-                    "Ask about players, teams, games or stats across BBL, EuroLeague, "
-                    "EuroCup and Champions League — in German or English. "
-                    "The buttons above are a starting point."
+                    "Frag nach Spielern, Teams, Spielen oder Statistiken aus BBL, "
+                    "EuroLeague, EuroCup und Champions League. "
+                    "Die Buttons oben sind ein Startpunkt."
                 ),
             }
         ]
@@ -825,7 +842,7 @@ def main() -> None:
     starter_question = render_starter_questions()
     render_chat()
 
-    typed_question = st.chat_input("Ask about players, teams, games, or stats")
+    typed_question = st.chat_input("Frag nach Spielern, Teams, Spielen oder Statistiken")
     question = starter_question or typed_question
     if not question:
         return
@@ -843,7 +860,7 @@ def main() -> None:
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Generating SQL and querying PostgreSQL..."):
+        with st.spinner("Erzeuge SQL und frage PostgreSQL ab …"):
             _rows = None
             try:
                 answer, sql, _rows = answer_question(question, **llm_config)
@@ -852,7 +869,7 @@ def main() -> None:
                 sql = None
                 st.error(answer)
             except UnsafeSqlError as exc:
-                answer = f"I rejected the generated SQL: {exc}"
+                answer = f"Ich habe das erzeugte SQL abgelehnt: {exc}"
                 sql = None
                 st.error(answer)
             except QueryEngineError as exc:
@@ -860,7 +877,7 @@ def main() -> None:
                 sql = None
                 st.error(answer)
             except Exception as exc:
-                answer = f"LLM or database query failed: {exc}"
+                answer = f"LLM- oder Datenbankabfrage fehlgeschlagen: {exc}"
                 sql = None
                 st.error(answer)
             else:

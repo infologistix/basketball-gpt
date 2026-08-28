@@ -761,7 +761,7 @@ def summarize_answer(
 ) -> str:
     """Summarize SQL result rows into a user-facing answer."""
     if not rows:
-        return "No data found for that question. Try asking about a narrower table, date range, team, or player."
+        return "Keine Daten für diese Frage gefunden. Versuch es mit einer engeren Tabelle, einem Zeitraum, Team oder Spieler."
 
     intent = classify_question(question)
     if intent == "draw":
