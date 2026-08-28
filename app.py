@@ -208,11 +208,17 @@ def sidebar() -> dict[str, str | None]:
         st.header("LLM")
         default_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
         provider_options = ["ollama", "gemini", "openai"]
+        # "openai" stays the internal key - it is the LLM_PROVIDER env value, the
+        # branch conditions below and the openai_* config fields. Only the label
+        # changes: this provider talks to the in-cluster KubeSpectra LiteLLM
+        # proxy, which is merely OpenAI-compatible, not OpenAI.
+        provider_labels = {"openai": "KubeSpectra"}
         default_index = provider_options.index(default_provider) if default_provider in provider_options else 0
         provider = st.selectbox(
             "Provider",
             options=provider_options,
             index=default_index,
+            format_func=lambda value: provider_labels.get(value, value),
         )
 
         empty_llm_config = {
@@ -258,7 +264,7 @@ def sidebar() -> dict[str, str | None]:
 
         if provider == "openai":
             openai_base_url = st.text_input(
-                "OpenAI-compatible base URL",
+                "KubeSpectra base URL",
                 value=st.session_state.get(
                     "openai_base_url",
                     os.getenv("OPENAI_BASE_URL", "http://litellm.litellm.svc.cluster.local:4000/v1"),
@@ -266,11 +272,11 @@ def sidebar() -> dict[str, str | None]:
                 help="The in-cluster LiteLLM proxy by default (same one datachat uses).",
             )
             openai_model = st.text_input(
-                "OpenAI-compatible model",
+                "KubeSpectra model",
                 value=st.session_state.get("openai_model", os.getenv("OPENAI_MODEL", "qwen3.6-35b-a3b-coder")),
             )
             openai_api_key = st.text_input(
-                "OpenAI-compatible API key",
+                "KubeSpectra API key",
                 # Not pre-filled from OPENAI_API_KEY — see the note on the Ollama key field above.
                 value=st.session_state.get("openai_api_key", ""),
                 type="password",
