@@ -690,7 +690,7 @@ def answer_schema_question(question: str, db_path: str | None = None) -> tuple[s
     )
     if "first table" not in normalized:
         table_list = ", ".join(f"`{row['table_schema']}.{row['table_name']}`" for row in rows)
-        return f"The configured schemas contain these tables: {table_list}.", rendered_sql, rows
+        return f"Die konfigurierten Schemas enthalten diese Tabellen: {table_list}.", rendered_sql, rows
 
     table_name = f"{rows[0]['table_schema']}.{rows[0]['table_name']}"
     answer = (
@@ -738,13 +738,13 @@ def answer_column_metadata_question(
     )
     qualified_name = f"{table_schema}.{table_name}"
     if not rows:
-        return f"I could not find any columns for `{qualified_name}`.", rendered_sql, rows
+        return f"Für `{qualified_name}` konnte ich keine Spalten finden.", rendered_sql, rows
 
     if wants_count:
         count = rows[0]["column_count"]
         return f"`{qualified_name}` has {count:,} columns.", rendered_sql, rows
 
-    return f"Here are the columns in `{qualified_name}`.", rendered_sql, rows
+    return f"Das sind die Spalten von `{qualified_name}`.", rendered_sql, rows
 
 
 def summarize_answer(
@@ -782,7 +782,7 @@ SQL:
 Rows:
 {rows[:100]}
 
-Give a concise, formatted answer. Mention if the result is limited by returned rows or a SQL LIMIT.
+Give a concise, formatted answer IN THE SAME LANGUAGE AS THE QUESTION. Mention if the result is limited by returned rows or a SQL LIMIT.
 """.strip()
     response = generate_text(
         prompt=prompt,
@@ -807,10 +807,10 @@ def table_answer(question: str, sql: str, rows: list[dict[str, Any]]) -> str:
     row_count = len(rows)
     columns = list(rows[0].keys()) if rows else []
     table_name = referenced_table_name(sql)
-    target = f" from `{table_name}`" if table_name else ""
+    target = f" aus `{table_name}`" if table_name else ""
     if "column" in question.lower() or "schema" in question.lower():
-        return f"Here are the schema details{target}: {row_count} rows returned."
-    return f"Here are {row_count} rows{target}. The result has {len(columns)} columns."
+        return f"Schema-Details{target}: {row_count} Zeilen."
+    return f"{row_count} Zeilen{target}, {len(columns)} Spalten."
 
 
 def referenced_table_name(sql: str) -> str | None:
@@ -918,8 +918,8 @@ def answer_known_chart_question(question: str, db_path: str | None = None) -> tu
     sql = "\n".join(line.strip() for line in sql.strip().splitlines())
     rows = execute_sql(validate_sql(sql), db_path=db_path)
     answer = (
-        f"Here is the chart-ready result with {len(rows)} rows. "
-        "I converted `minutes` from MM:SS text into decimal minutes and excluded `00:00` rows."
+        f"Diagrammfertiges Ergebnis mit {len(rows)} Zeilen. "
+        "`minutes` wurde von MM:SS in Dezimalminuten umgerechnet, `00:00`-Zeilen sind ausgeschlossen."
     )
     return answer, sql, rows
 
@@ -930,11 +930,11 @@ def chart_answer(question: str, sql: str, rows: list[dict[str, Any]]) -> str:
     limited = "limit" in sql.lower()
     notes = []
     if limited:
-        notes.append("The SQL result is limited.")
+        notes.append("Das SQL-Ergebnis ist durch ein LIMIT begrenzt.")
     if excluded_zero_totals(sql, question):
-        notes.append("Zero point totals were excluded so the ascending top chart starts with positive scorers.")
+        notes.append("Null-Punkte-Summen sind ausgeschlossen, damit das aufsteigende Diagramm bei echten Scorern beginnt.")
     suffix = " " + " ".join(notes) if notes else ""
-    return f"Here is the chart-ready result with {row_count} rows.{suffix}"
+    return f"Diagrammfertiges Ergebnis mit {row_count} Zeilen.{suffix}"
 
 
 def answer_question(
