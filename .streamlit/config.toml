@@ -1,0 +1,14 @@
+# Without this file Streamlit picks its stock dark defaults: a blue-tinted
+# near-black, red primary buttons and a bright green for inline code. None of
+# that was chosen, and the green in particular reads as a terminal/error colour
+# on a page whose captions use `backticks` as emphasis.
+#
+# Warm neutral surfaces, one accent (leather orange) for the primary action.
+# Anything not expressible here (the typeface, tabular figures) lives in
+# inject_styles() in app.py.
+[theme]
+base = "dark"
+primaryColor = "#E07A46"
+backgroundColor = "#14120F"
+secondaryBackgroundColor = "#1A1714"
+textColor = "#EFEAE3"

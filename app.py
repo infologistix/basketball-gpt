@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any
+from uuid import uuid4
 
 import altair as alt
 import pandas as pd
@@ -12,7 +13,7 @@ from psycopg import sql
 from psycopg import Error as PostgresError
 from psycopg.rows import dict_row
 
-from db import connect, get_db_label, get_schemas
+from db import connect, get_database_name, get_db_label, get_schemas
 from lightweight_rag import load_entries, load_rejected_entries, rag_enabled, save_bad_example, save_good_example
 from query_engine import MissingApiKeyError, QueryEngineError, UnsafeSqlError, answer_question, classify_question
 
@@ -23,12 +24,18 @@ st.set_page_config(page_title="BasketballGPT", layout="wide")
 
 AUTO_CREATE_SCHEMAS = os.getenv("NBA_AUTO_CREATE_SCHEMAS", "false").lower() in {"1", "true", "yes"}
 
+# Six, not five, so the three-column grid fills two even rows instead of leaving
+# a gap. Kept to a similar length each: the old set mixed a three-word label with
+# a full sentence, so one button wrapped to two lines and the row went ragged.
+# German because that is the language questions are actually asked in here; the
+# chrome stays English.
 STARTER_QUESTIONS = [
-    "List me all tables",
-    "Show 20 sample rows from bronze.b_el_boxscore",
-    "Draw a bar chart of total pts by player_name from b_el_boxscore, top 20, sort descending",
-    "Which players have the most rows in b_el_boxscore?",
-    "Show me the columns in b_el_playbyplay",
+    "Welche Tabellen gibt es in bronze?",
+    "Meiste Rebounds in der BBL-Saison 2025-2026",
+    "Welche BBL-Spieler kommen aus Deutschland?",
+    "Punkte pro BBL-Team als Balkendiagramm",
+    "20 Beispielzeilen aus bronze.b_el_boxscore",
+    "Beste Dreipunktequote der EuroLeague 2025-2026",
 ]
 
 
@@ -37,6 +44,26 @@ def inject_styles() -> None:
     st.markdown(
         """
         <style>
+        /* config.toml's [theme] font key only accepts sans serif / serif /
+           monospace, so the typeface has to come through here. IBM Plex pairs a
+           sans with a mono of matching metrics, which is what table names and
+           SQL need sitting next to prose. */
+        @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+            font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        }
+
+        code, pre, [data-testid="stCodeBlock"] * {
+            font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace !important;
+        }
+
+        /* Without tabular figures the numeric columns of every result table
+           jitter as rows scroll past. */
+        [data-testid="stDataFrame"], [data-testid="stTable"] {
+            font-variant-numeric: tabular-nums;
+        }
+
         [data-testid="stChatMessage"],
         [data-testid="stChatMessageContent"],
         [data-testid="stMarkdownContainer"],
@@ -191,18 +218,29 @@ def sidebar() -> dict[str, str | None]:
     with st.sidebar:
         st.header("BasketballGPT")
         st.caption("Basketball analytics across bronze, silver, and gold.")
-        st.caption(f"Database: `{get_db_label()}`")
-        st.caption(f"Configured tables: {configured_table_count()}")
+
+        # The full connection string used to sit here, rendered as four lines of
+        # inline code - the loudest element on the page for a value nobody reads
+        # day to day. What matters at a glance is the database name and how many
+        # tables are reachable; the URL moves to the bottom of the sidebar.
+        st.caption(f"{get_database_name()} · {configured_table_count()} tables")
 
         with st.expander("Schema Browser", expanded=True):
             render_schema_browser()
 
         st.divider()
         st.header("SQL Memory")
-        status = "enabled" if rag_enabled() else "disabled"
-        st.caption(f"Lightweight RAG: `{status}`")
-        st.caption(f"Good examples: `{len(load_entries())}`")
-        st.caption(f"Rejected examples: `{len(load_rejected_entries())}`")
+        # Backticks here rendered as inline code, i.e. in the theme's code
+        # colour - an accidental highlight on a plain count. Plain text instead,
+        # and the two counts side by side so they read as a pair.
+        good_column, rejected_column = st.columns(2)
+        good_column.metric("Good", len(load_entries()))
+        rejected_column.metric("Rejected", len(load_rejected_entries()))
+        if not rag_enabled():
+            st.caption("Retrieval is disabled (SQL_RAG_ENABLED)")
+
+        with st.expander("Connection details"):
+            st.code(get_db_label(), language=None)
 
         st.divider()
         st.header("LLM")
@@ -328,7 +366,10 @@ def render_chat() -> None:
                         st.dataframe(message["rows"], use_container_width=True)
                 render_result_summary(message.get("rows"), message.get("intent"))
                 render_result_chart(message.get("rows"), message.get("sql"), message.get("question"))
-                render_feedback_controls(message, key_prefix=f"history_{index}")
+                render_feedback_controls(
+                    message,
+                    key_prefix=message.get("feedback_id") or f"history_{index}",
+                )
 
 
 def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
@@ -770,10 +811,13 @@ def main() -> None:
         st.session_state.messages = [
             {
                 "role": "assistant",
+                # The three examples used to be repeated here as inline code,
+                # which broke the sentence into blocks and duplicated what the
+                # starter buttons above already show.
                 "content": (
-                    "Welcome to BasketballGPT. Ask questions like `List me all tables`, "
-                    "`Show sample rows from silver.s_el_player_stats_prospiel`, "
-                    "or `Draw a bar chart of total pts by player_name from bronze.b_el_boxscore`."
+                    "Ask about players, teams, games or stats across BBL, EuroLeague, "
+                    "EuroCup and Champions League — in German or English. "
+                    "The buttons above are a starting point."
                 ),
             }
         ]
@@ -786,6 +830,13 @@ def main() -> None:
     if not question:
         return
     intent = classify_question(question)
+
+    # One id per answer, minted before the answer is rendered and stored with it.
+    # The feedback buttons used to be keyed "current_answer" while live and
+    # "history_<index>" once replayed, so the first click landed on a widget the
+    # rerun then destroyed - the event was dropped and the button needed a second
+    # press. A stable key makes both render passes the same widget.
+    feedback_id = f"fb_{uuid4().hex[:12]}"
 
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
@@ -826,7 +877,7 @@ def main() -> None:
                         "sql": sql,
                         "content": answer,
                     },
-                    key_prefix="current_answer",
+                    key_prefix=feedback_id,
                 )
 
     st.session_state.messages.append(
@@ -837,6 +888,7 @@ def main() -> None:
             "rows": _rows if sql else None,
             "question": question,
             "intent": intent,
+            "feedback_id": feedback_id,
         }
     )
 

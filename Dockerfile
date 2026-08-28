@@ -17,6 +17,7 @@ ENV \
     MAX_QUERY_ROWS=5000
 
 COPY app.py db.py query_engine.py lightweight_rag.py ./
+COPY .streamlit ./.streamlit
 COPY knowledge ./knowledge
 COPY scripts ./scripts
 

@@ -2,7 +2,10 @@ __pycache__/
 *.py[cod]
 .env
 nba.db
-.streamlit/
+# Keep secrets out but track the theme: config.toml is what gives the app a
+# deliberate palette instead of Streamlit's stock dark defaults.
+.streamlit/*
+!.streamlit/config.toml
 .venv/
 venv/
 .DS_Store

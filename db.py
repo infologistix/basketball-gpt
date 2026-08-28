@@ -52,6 +52,15 @@ def get_db_label() -> str:
     return f"{safe_database_url(get_database_url())} schemas={schemas}"
 
 
+def get_database_name() -> str:
+    """Return just the database name, for a compact sidebar status line."""
+    try:
+        path = urlsplit(get_database_url()).path
+    except ValueError:
+        return "unknown"
+    return path.lstrip("/") or "unknown"
+
+
 def safe_database_url(database_url: str) -> str:
     """Return a display-safe database URL with any password removed."""
     try:
