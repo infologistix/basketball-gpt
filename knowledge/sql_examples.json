@@ -226,5 +226,50 @@
       "season"
     ],
     "doc": "A team's win-loss record needs the UNION ALL reorientation pattern (one row per team-game, deduplicated first per the boxscore-duplication note) with BOTH branches relabeled to team_pts/opp_pts before comparing - never keep raw home_pts/away_pts columns after the UNION and compare those directly, and never write a CASE that only checks the home-team win condition. Both mistakes silently drop every away game for the target team. Verified against live data: a query checking only 'home_team ILIKE team AND home_pts > away_pts' reported Real Madrid 35-9 for the full season; the real record, from this correctly reoriented query, is 28-16 - a materially different, wrong record, not just an imprecise one. This mistake recurs often even when the lesson has been taught before - double-check every win-loss query against this exact pattern rather than improvising a new one."
+  },
+  {
+    "question": "Aus welchen Ländern kamen die meisten Punkte in der Champions-League-Saison 2025–2026?",
+    "sql": "WITH info AS (\n  SELECT DISTINCT ON (btrim(player_name))\n         btrim(player_name) AS player_name, nationality\n  FROM bronze.b_cl_player_info\n),\nsaison AS (\n  SELECT btrim(player_name) AS player_name, SUM(pts) AS punkte\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY 1\n)\nSELECT i.nationality, COUNT(*) AS spieler, SUM(s.punkte) AS punkte\nFROM saison s\nJOIN info i USING (player_name)\nGROUP BY 1\nORDER BY punkte DESC",
+    "tables": [
+      "bronze.b_cl_boxscore",
+      "bronze.b_cl_player_info"
+    ],
+    "tags": [
+      "nationality",
+      "country",
+      "land",
+      "länder",
+      "player_info",
+      "join",
+      "distinct on",
+      "duplicate",
+      "champions league",
+      "points",
+      "punkte",
+      "season"
+    ],
+    "doc": "Joining a boxscore to a *_player_info table needs DISTINCT ON. player_info holds ONE ROW PER CRAWLED SEASON per player - 206 of 1165 Champions League players have 2-4 rows - so a plain JOIN fans out and multiplies their points by that row count. Verified against live data: without DISTINCT ON, USA came out at 17752 points instead of 9813, and the inflation is NOT uniform, so the ranking itself changes (Turkey rose from 6th to 3rd, Germany fell from 5th to 7th). Also note: player_info has NO season column, so the season must be filtered on the boxscore side and only then joined for the attribute - filtering player_info alone silently mixes every crawled season. Use btrim() on both sides of the name join; without it players with stray whitespace drop out entirely. Champions League has three profile tables (b_cl_player_info, _alt, _test) - b_cl_player_info is the canonical one."
+  },
+  {
+    "question": "Wer war in der BBL-Saison 2025–2026 der beste Rebounder jedes Teams (mindestens 15 Spiele)?",
+    "sql": "WITH je_spieler AS (\n  SELECT player_team AS team,\n         btrim(player_name) AS spieler,\n         COUNT(*) AS spiele,\n         ROUND(AVG(reb), 2) AS reb_schnitt\n  FROM bronze.b_bbl_boxscore\n  WHERE date_final >= '2025-08-01' AND date_final < '2026-08-01'\n  GROUP BY 1, 2\n  HAVING COUNT(*) >= 15\n),\nrang AS (\n  SELECT *, ROW_NUMBER() OVER (PARTITION BY team ORDER BY reb_schnitt DESC) AS rn\n  FROM je_spieler\n)\nSELECT team, spieler, spiele, reb_schnitt\nFROM rang\nWHERE rn = 1\nORDER BY reb_schnitt DESC",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "rebounds",
+      "rebounder",
+      "best per team",
+      "per group",
+      "row_number",
+      "partition by",
+      "window function",
+      "rank",
+      "bbl",
+      "bundesliga",
+      "minimum",
+      "games"
+    ],
+    "doc": "A 'best X per team/group' question needs ROW_NUMBER() OVER (PARTITION BY group ORDER BY metric DESC) in a CTE, then WHERE rn = 1 - not a plain GROUP BY, which cannot return the row that produced the maximum. Two traps specific to this database. First, do NOT source this from gold.g_player_profile_*: its pts/reb/trb columns are ALREADY per-game averages, so dividing them by gp again yields rebounds-per-game-per-game, which systematically favours players with few games - verified against live data, that mistake picked the wrong player for 8 of 18 BBL teams. Second, g_player_profile_bbl is incomplete (265 players), so several teams' actual best rebounder does not exist in it at all; any question about coverage across all teams or all players must come from the bronze boxscore. Use player_team for the player's own team - home_team_final/away_team_final are the fixture, not the player's team."
   }
 ]
