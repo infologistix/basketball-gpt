@@ -39,6 +39,17 @@ STARTER_QUESTIONS = [
 ]
 
 
+# Only the tab captions are translated. The keys stay English because they are
+# also what requested_chart_name() returns and what prioritize_chart_options()
+# matches on - renaming those would mean touching the matching logic too.
+CHART_TAB_LABELS = {
+    "Bar": "Balken",
+    "Line": "Linie",
+    "Scatter": "Streuung",
+    "Histogram": "Histogramm",
+}
+
+
 def inject_styles() -> None:
     """Inject CSS that keeps chat, SQL, and table output readable."""
     st.markdown(
@@ -377,7 +388,7 @@ def render_chat() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message.get("sql"):
-                with st.expander("Generated SQL"):
+                with st.expander("Erzeugtes SQL"):
                     st.code(message["sql"], language="sql")
                     if message.get("rows"):
                         st.dataframe(message["rows"], use_container_width=True)
@@ -476,7 +487,7 @@ def render_result_chart(
             st.caption("Kein passendes Diagramm für diese Zeilen.")
             return
 
-        tabs = st.tabs(chart_options)
+        tabs = st.tabs([CHART_TAB_LABELS.get(name, name) for name in chart_options])
         for tab, chart_name in zip(tabs, chart_options, strict=True):
             with tab:
                 if chart_name == "Bar":
@@ -629,13 +640,13 @@ def requested_chart_name(question: str | None) -> str | None:
     if not question:
         return None
     lowered = question.lower()
-    if "scatter" in lowered:
+    if "scatter" in lowered or "streu" in lowered:
         return "Scatter"
-    if "line" in lowered:
+    if "line" in lowered or "linien" in lowered or "verlauf" in lowered:
         return "Line"
     if "histogram" in lowered:
         return "Histogram"
-    if "bar" in lowered:
+    if "bar" in lowered or "balken" in lowered:
         return "Bar"
     return None
 
@@ -658,7 +669,7 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
         return
 
     sort_order = "ascending" if sort_ascending else "descending"
-    title = f"{humanize_column(value_column)} by {humanize_column(label_column)}"
+    title = f"{humanize_column(value_column)} nach {humanize_column(label_column)}"
     chart = (
         alt.Chart(chart_df)
         .mark_bar()
@@ -723,7 +734,7 @@ def render_line_chart(df: pd.DataFrame, numeric_columns: list[str]) -> None:
                 alt.Tooltip(f"{value_column}:Q", title=humanize_column(value_column)),
             ],
         )
-        .properties(title=f"{humanize_column(value_column)} Over {humanize_column(date_column)}")
+        .properties(title=f"{humanize_column(value_column)} über {humanize_column(date_column)}")
     )
     st.altair_chart(chart, use_container_width=True)
 
@@ -882,7 +893,7 @@ def main() -> None:
                 st.error(answer)
             else:
                 st.markdown(answer)
-                with st.expander("Generated SQL"):
+                with st.expander("Erzeugtes SQL"):
                     st.code(sql, language="sql")
                     if _rows:
                         st.dataframe(_rows, use_container_width=True)
