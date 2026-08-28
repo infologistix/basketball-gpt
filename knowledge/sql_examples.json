@@ -271,5 +271,26 @@
       "games"
     ],
     "doc": "A 'best X per team/group' question needs ROW_NUMBER() OVER (PARTITION BY group ORDER BY metric DESC) in a CTE, then WHERE rn = 1 - not a plain GROUP BY, which cannot return the row that produced the maximum. Two traps specific to this database. First, do NOT source this from gold.g_player_profile_*: its pts/reb/trb columns are ALREADY per-game averages, so dividing them by gp again yields rebounds-per-game-per-game, which systematically favours players with few games - verified against live data, that mistake picked the wrong player for 8 of 18 BBL teams. Second, g_player_profile_bbl is incomplete (265 players), so several teams' actual best rebounder does not exist in it at all; any question about coverage across all teams or all players must come from the bronze boxscore. Use player_team for the player's own team - home_team_final/away_team_final are the fixture, not the player's team."
+  },
+  {
+    "question": "Welche Spieler in der Bundesliga kommen aus Deutschland?",
+    "sql": "SELECT DISTINCT ON (btrim(player_name))\n       btrim(player_name) AS spieler, player_team, nationality\nFROM bronze.b_bbl_player_info\nWHERE nationality ILIKE '%Deutschland%'\nORDER BY btrim(player_name)",
+    "tables": [
+      "bronze.b_bbl_player_info"
+    ],
+    "tags": [
+      "nationality",
+      "country",
+      "nationalität",
+      "land",
+      "deutschland",
+      "germany",
+      "bbl",
+      "bundesliga",
+      "player_info",
+      "distinct on",
+      "ilike"
+    ],
+    "doc": "Country filters must use the spelling of the league's own table, and always ILIKE, never '='. b_bbl_player_info stores nationality in GERMAN with a 2-letter ISO code in brackets, so ILIKE '%Germany%' matches 0 of 859 rows while ILIKE '%Deutschland%' matches 392 - verified against live data. The bracket is not reliable either (260 rows 'Deutschland (DE)', 70 rows plain 'Deutschland'), and dual nationals hold both countries in one cell separated by a newline (86 rows), so a substring match is the only form that catches all three shapes. DISTINCT ON is required because player_info holds one row per crawled season: 392 rows correspond to 304 distinct players. The encoding differs per league - EuroLeague and EuroCup use English full names ('Germany', and EC writes 'Turkiye'), Champions League uses 3-letter codes ('GER') with comma-separated duals - so this literal must be changed per league and a single cross-league country query is not possible."
   }
 ]
