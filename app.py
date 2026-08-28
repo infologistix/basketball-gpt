@@ -558,11 +558,11 @@ def render_result_chart(
                 if chart_name == "Bar":
                     render_bar_chart(df, numeric_columns, generated_sql)
                 elif chart_name == "Line":
-                    render_line_chart(df, numeric_columns)
+                    render_line_chart(df, numeric_columns, generated_sql)
                 elif chart_name == "Scatter":
                     render_scatter_chart(df, numeric_columns, question)
                 elif chart_name == "Histogram":
-                    render_histogram(df, numeric_columns)
+                    render_histogram(df, numeric_columns, generated_sql)
 
 
 def should_show_visualizations(question: str | None, _generated_sql: str | None) -> bool:
@@ -720,7 +720,9 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
     """Render a horizontal bar chart with stable sorting and tooltips."""
     label_columns = [column for column in df.columns if column not in numeric_columns]
     label_column = st.selectbox("Beschriftung", label_columns or list(df.columns), key=f"bar_label_{id(df)}")
-    value_column = st.selectbox("Wert", numeric_columns, key=f"bar_value_{id(df)}")
+    value_column = st.selectbox(
+        "Wert", numeric_columns, index=default_value_index(numeric_columns, generated_sql), key=f"bar_value_{id(df)}"
+    )
     sort_ascending = bar_chart_sort_ascending(generated_sql)
     chart_df = df[[label_column, value_column]].dropna()
     if should_sort_bar_chart(generated_sql, value_column):
@@ -762,6 +764,33 @@ def humanize_column(column: str) -> str:
     return column.replace("_", " ").strip().title()
 
 
+def default_value_index(numeric_columns: list[str], generated_sql: str | None) -> int:
+    """Return the index of the ORDER BY column, so the value selectbox opens on the
+    metric the query actually ranked by - not the first numeric column returned.
+
+    st.selectbox without an explicit index defaults to position 0, i.e. the leftmost
+    numeric column in the SELECT list. For a query like
+    "SELECT ..., ftm AS ft_made, ROUND(...) AS ft_pct ... ORDER BY ft_pct DESC",
+    that silently opens on ft_made - a raw count - while the chart's own title still
+    reads "ft_pct nach player_name", making the bar lengths and sort order answer a
+    different question than the one asked. Verified against live data: a "best free
+    throw percentage, min 50 attempts" question correctly selected the right 10
+    players via ft_pct, then displayed and sorted them by ft_made instead - the true
+    #1 by percentage (91.0%, 61 makes) rendered near the bottom, while a lower-ranked
+    player with more raw makes (89.1%, 139 makes) rendered at the top.
+    """
+    if not generated_sql:
+        return 0
+    match = re.search(r"order\s+by\s+([a-zA-Z_]\w*)", generated_sql, re.IGNORECASE)
+    if not match:
+        return 0
+    target = match.group(1).lower()
+    for index, column in enumerate(numeric_columns):
+        if column.lower() == target:
+            return index
+    return 0
+
+
 def should_sort_bar_chart(generated_sql: str | None, value_column: str) -> bool:
     """Return whether the chart should sort locally rather than trust SQL order."""
     if not generated_sql:
@@ -779,11 +808,13 @@ def bar_chart_sort_ascending(generated_sql: str | None) -> bool:
     return False
 
 
-def render_line_chart(df: pd.DataFrame, numeric_columns: list[str]) -> None:
+def render_line_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql: str | None = None) -> None:
     """Render a line chart for date/time series results."""
     date_columns = list(df.select_dtypes(include="datetime").columns)
     date_column = st.selectbox("Datum/Zeit", date_columns, key=f"line_date_{id(df)}")
-    value_column = st.selectbox("Wert", numeric_columns, key=f"line_value_{id(df)}")
+    value_column = st.selectbox(
+        "Wert", numeric_columns, index=default_value_index(numeric_columns, generated_sql), key=f"line_value_{id(df)}"
+    )
     chart_df = df[[date_column, value_column]].dropna().sort_values(date_column).head(500)
     if chart_df.empty:
         st.caption("Keine Zeilen für ein Liniendiagramm.")
@@ -867,9 +898,11 @@ def match_column_name(requested: str, columns: list[str]) -> str | None:
     return None
 
 
-def render_histogram(df: pd.DataFrame, numeric_columns: list[str]) -> None:
+def render_histogram(df: pd.DataFrame, numeric_columns: list[str], generated_sql: str | None = None) -> None:
     """Render a histogram for one numeric result column."""
-    value_column = st.selectbox("Wert", numeric_columns, key=f"hist_value_{id(df)}")
+    value_column = st.selectbox(
+        "Wert", numeric_columns, index=default_value_index(numeric_columns, generated_sql), key=f"hist_value_{id(df)}"
+    )
     chart_df = df[[value_column]].dropna().head(5000)
     if chart_df.empty:
         st.caption("Keine Zeilen für ein Histogramm.")
