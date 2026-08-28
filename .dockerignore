@@ -2,7 +2,8 @@ __pycache__/
 *.py[cod]
 .env
 nba.db
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 .venv/
 venv/
 docs/

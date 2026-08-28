@@ -15,6 +15,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py db.py query_engine.py lightweight_rag.py ./
+COPY .streamlit ./.streamlit
 COPY knowledge ./knowledge
 COPY scripts ./scripts
 
