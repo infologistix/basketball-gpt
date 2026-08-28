@@ -383,7 +383,12 @@ def infer_tags(question: str) -> list[str]:
             "spalte", "spalten", "tabelle", "tabellen",
         ),
         "sample": ("sample", "preview", "rows", "beispielzeilen", "zeilen"),
-        "points": ("point", "points", "pts", "score", "punkte", "punkten", "korb"),
+        # Word-bounded matching means "score" no longer covers "scorer" or
+        # "scoring" the way the old substring test did - list them explicitly.
+        "points": (
+            "point", "points", "pts", "score", "scorer", "scorers", "scoring",
+            "punkte", "punkten", "korb", "korbjäger", "punktbester",
+        ),
         "euroleague": ("euroleague", "el"),
         "eurocup": ("eurocup", "ec"),
         "bbl": ("bbl", "bundesliga"),
