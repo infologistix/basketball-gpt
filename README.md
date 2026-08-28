@@ -59,6 +59,15 @@ LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_key
 ```
 
+For an OpenAI-compatible endpoint (e.g. an in-cluster LiteLLM proxy):
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_BASE_URL=http://litellm.litellm.svc.cluster.local:4000/v1
+OPENAI_MODEL=qwen3.6-35b-a3b-coder
+OPENAI_API_KEY=your_litellm_key
+```
+
 ## Lightweight SQL Memory
 
 BasketballGPT includes a small Vanna-like retrieval layer without adding Vanna or a vector database. It loads curated examples from:
@@ -74,9 +83,13 @@ Configuration:
 ```bash
 SQL_RAG_ENABLED=true
 SQL_RAG_MAX_EXAMPLES=4
+SQL_RAG_KNOWLEDGE_PATH=./knowledge/sql_examples.json
+SQL_RAG_REJECTED_PATH=./knowledge/rejected_sql_examples.json
 ```
 
-Add more examples to `knowledge/sql_examples.json` when you find prompts that should become more reliable.
+Every answer has **Save good** and **Mark bad** buttons in the UI. "Save good" appends the question and generated SQL to `sql_examples.json`. "Mark bad" asks for a reason first, then appends to `rejected_sql_examples.json` as an anti-pattern the model is told to avoid - a good reason (what was wrong, what the correct approach is) matters much more than the SQL itself, since it is what actually reaches the model on a similar future question.
+
+This is the primary way the knowledge base grows day to day - editing the JSON files by hand is only needed for bulk changes. In the cluster deployment, `SQL_RAG_KNOWLEDGE_PATH`/`SQL_RAG_REJECTED_PATH` point at a PersistentVolumeClaim mounted at `/data/knowledge` (not `/app/knowledge`, which holds the image's seed copy), so feedback saved through the UI survives pod restarts and redeploys.
 
 ## Run
 
