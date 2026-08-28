@@ -389,9 +389,22 @@ def classify_question(question: str) -> str:
         return "draw"
     if "sql" in normalized and any(word in normalized for word in ("debug", "fix", "explain", "why", "error")):
         return "debug_sql"
-    if any(phrase in normalized for phrase in ("list me all tables", "list all tables", "show tables")):
+    if any(
+        phrase in normalized
+        for phrase in (
+            "list me all tables",
+            "list all tables",
+            "show tables",
+            "welche tabellen",
+            "alle tabellen",
+            "zeige tabellen",
+        )
+    ):
         return "schema"
-    if any(word in normalized for word in ("schema", "column", "columns", "tables")):
+    if any(
+        word in normalized
+        for word in ("schema", "column", "columns", "tables", "spalte", "spalten", "tabelle")
+    ):
         return "schema"
     if any(
         phrase in normalized
@@ -403,6 +416,11 @@ def classify_question(question: str) -> str:
             "preview",
             "first rows",
             "raw rows",
+            "beispielzeilen",
+            "beispiel zeilen",
+            "erste zeilen",
+            "zeige zeilen",
+            "rohdaten",
         )
     ):
         return "table"
@@ -414,7 +432,7 @@ def has_draw_visualization_intent(question: str | None) -> bool:
     if not question:
         return False
     normalized = question.lower()
-    draw_words = ("draw", "draws", "drawing", "draw me")
+    draw_words = ("draw", "draws", "drawing", "draw me", "zeichne", "zeichnen", "male")
     visualization_words = (
         "chart",
         "diagram",
@@ -427,6 +445,17 @@ def has_draw_visualization_intent(question: str | None) -> bool:
         "scatter",
         "scatter plot",
         "histogram",
+        # German. "diagramm" already matches "diagram" by substring, the rest
+        # did not — a "Zeichne mir ein Balkendiagramm" fell through to the
+        # plain answer intent and no chart was rendered.
+        "diagramm",
+        "grafik",
+        "schaubild",
+        "histogramm",
+        "balkendiagramm",
+        "liniendiagramm",
+        "streudiagramm",
+        "kreisdiagramm",
     )
     return any(word in normalized for word in draw_words + visualization_words)
 

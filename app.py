@@ -332,6 +332,8 @@ def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
     if not question or not sql:
         return
 
+    reason_key = f"{key_prefix}_ask_reason"
+
     columns = st.columns([1, 1, 5])
     if columns[0].button("Save good", key=f"{key_prefix}_save_good", help="Save this question and SQL as a reusable example."):
         saved, detail = save_good_example(question=question, sql=sql, answer=message.get("content"))
@@ -340,11 +342,38 @@ def render_feedback_controls(message: dict[str, Any], key_prefix: str) -> None:
         else:
             st.info(detail)
     if columns[1].button("Mark bad", key=f"{key_prefix}_mark_bad", help="Save this SQL as a rejected pattern for similar questions."):
-        saved, detail = save_bad_example(question=question, sql=sql)
-        if saved:
-            st.warning("Saved as a rejected SQL example.")
-        else:
-            st.info(detail)
+        st.session_state[reason_key] = True
+
+    if not st.session_state.get(reason_key):
+        return
+
+    # format_rejected_context() puts this reason straight into later prompts, so
+    # the default "Marked as bad by user." teaches the model nothing: it learns
+    # to avoid the pattern without learning how to fix it. Require a real one.
+    with st.form(key=f"{key_prefix}_reason_form"):
+        reason = st.text_input(
+            "Why is this wrong?",
+            placeholder="e.g. missing DISTINCT ON - the join fans out and doubles every total",
+        )
+        form_columns = st.columns([1, 1, 5])
+        confirmed = form_columns[0].form_submit_button("Save")
+        cancelled = form_columns[1].form_submit_button("Cancel")
+
+    if cancelled:
+        st.session_state[reason_key] = False
+        return
+    if not confirmed:
+        return
+    if not reason.strip():
+        st.error("Enter a reason first.")
+        return
+
+    saved, detail = save_bad_example(question=question, sql=sql, reason=reason.strip())
+    st.session_state[reason_key] = False
+    if saved:
+        st.warning("Saved as a rejected SQL example.")
+    else:
+        st.info(detail)
 
 
 def render_starter_questions() -> str | None:
