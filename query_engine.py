@@ -828,9 +828,14 @@ def referenced_table_name(sql: str) -> str | None:
 
 def table_name_from_question(question: str) -> str | None:
     """Extract a schema-qualified or unqualified table name from a prompt."""
+    # The optional schema part trails the name rather than leading it. Written
+    # as "(?:name\.)?name" the two \w* runs compete for the same characters, so
+    # a long run of word characters backtracks quadratically before failing.
+    # Anchoring the optional half behind a literal dot removes the ambiguity;
+    # the set of accepted strings is unchanged.
     for pattern in (
-        r"\b(?:from|in\s+table|table|in)\s+((?:[a-zA-Z_][\w]*\.)?[a-zA-Z_][\w]*)",
-        r"\b((?:[a-zA-Z_][\w]*\.)[a-zA-Z_][\w]*)",
+        r"\b(?:from|in\s+table|table|in)\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)",
+        r"\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*)",
     ):
         match = re.search(pattern, question, flags=re.IGNORECASE)
         if match:
@@ -882,7 +887,11 @@ def answer_known_chart_question(question: str, db_path: str | None = None) -> tu
         return None
 
     requested_table = table_name_from_question(question)
-    if not requested_table or not re.fullmatch(r"(?:[a-zA-Z_][\w]*\.)?[a-zA-Z_][\w]*", requested_table):
+    # PostgreSQL identifiers stop at 63 bytes, so anything longer cannot name a
+    # real table - rejecting it up front bounds the work regardless of pattern.
+    if not requested_table or len(requested_table) > 127:
+        return None
+    if not re.fullmatch(r"[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?", requested_table):
         return None
 
     if "." in requested_table:
