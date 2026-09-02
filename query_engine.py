@@ -25,6 +25,12 @@ DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")
 DEFAULT_OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "http://litellm.litellm.svc.cluster.local:4000/v1")
 DEFAULT_OPENAI_MODEL = os.getenv("OPENAI_MODEL", "qwen3.6-35b-a3b-coder")
 MAX_QUERY_ROWS = int(os.getenv("MAX_QUERY_ROWS", "5000"))
+# SQL generation should be deterministic-ish, not creative: the system prompt already
+# spells out the correct column/threshold/join for every documented trap, so a high
+# default sampling temperature (typically ~0.7-1.0 on these providers, previously left
+# unset here) just adds run-to-run variance on whether an already-answered rule gets
+# followed. Low but nonzero so a stuck/repeated generation still has room to vary.
+SQL_GENERATION_TEMPERATURE = float(os.getenv("SQL_GENERATION_TEMPERATURE", "0.1"))
 
 SCHEMA_PROMPT_TEMPLATE = """
 You are writing PostgreSQL SELECT queries for a basketball analytics database.
@@ -198,6 +204,7 @@ def _ollama_generate(
         "model": model_name or os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
         "prompt": prompt,
         "stream": False,
+        "options": {"temperature": SQL_GENERATION_TEMPERATURE},
     }
     if system:
         payload["system"] = system
@@ -257,6 +264,7 @@ def _openai_generate(
         "model": model_name or os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
         "messages": messages,
         "stream": False,
+        "temperature": SQL_GENERATION_TEMPERATURE,
     }
 
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
@@ -300,7 +308,8 @@ def generate_text(
     if selected == "gemini":
         configure_gemini(gemini_api_key)
         parts = [prompt] if system is None else [system, prompt]
-        response = _gemini_model(model_name).generate_content(parts)
+        generation_config = genai.types.GenerationConfig(temperature=SQL_GENERATION_TEMPERATURE)
+        response = _gemini_model(model_name).generate_content(parts, generation_config=generation_config)
         return (response.text or "").strip()
     if selected == "ollama":
         return _ollama_generate(
