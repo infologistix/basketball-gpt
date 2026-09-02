@@ -178,6 +178,34 @@ def inject_styles() -> None:
             overflow-wrap: anywhere;
             word-break: break-word !important;
         }
+
+        /* The knowledge-import file uploader is the only st.file_uploader in the
+           app. Its drag-and-drop instructions ("Drag and drop file here", the
+           size/type limit line) are English-only and not configurable through
+           any parameter, and a click-to-browse button is all this control is
+           actually used for - hidden rather than left showing unused, unwanted
+           English UI. The Browse button's own label is likewise baked-in
+           English; relabelled via ::after (hide the original text, do not
+           remove the element, so the button keeps its click handling and
+           accessible name). Selectors are streamlit==1.39.0's documented
+           data-testid names, NOT visually confirmed in a running app - check
+           this renders as intended after deploy, and again after any future
+           streamlit version bump, since these testids aren't a stable API. */
+        [data-testid="stFileUploaderDropzoneInstructions"] {
+            display: none;
+        }
+        [data-testid="stFileUploaderDropzone"] {
+            min-height: 0;
+            padding: 0.6rem;
+        }
+        [data-testid="stFileUploaderDropzone"] button {
+            font-size: 0;
+        }
+        [data-testid="stFileUploaderDropzone"] button::after {
+            content: "Datei auswählen";
+            font-size: 0.95rem;
+            font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        }
         </style>
         """,
         unsafe_allow_html=True,
