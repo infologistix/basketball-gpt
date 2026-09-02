@@ -346,6 +346,45 @@ def save_bad_example(question: str, sql: str, reason: str | None = None) -> tupl
     return append_json_entry(rejected_path(), entry)
 
 
+def import_good_examples(entries: list[Any]) -> dict[str, int]:
+    """Bulk-append uploaded entries to the good-example store, good ("richtig") only.
+
+    Entries are kept as-is (not rebuilt through build_feedback_entry), so a
+    file re-uploaded from an earlier export round-trips unchanged. The same
+    question+sql duplicate rule as append_json_entry applies, checked both
+    against what's already on disk and within the upload itself.
+    """
+    path = knowledge_path()
+    existing = read_json_entries(path)
+    seen = {(entry.get("question"), entry.get("sql")) for entry in existing}
+
+    added = 0
+    duplicates = 0
+    invalid = 0
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("question") or not entry.get("sql"):
+            invalid += 1
+            continue
+        key = (entry.get("question"), entry.get("sql"))
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
+        existing.append(entry)
+        added += 1
+
+    if added:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+        with temporary_path.open("w", encoding="utf-8") as handle:
+            json.dump(existing, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+        temporary_path.replace(path)
+        load_entries.cache_clear()
+
+    return {"added": added, "duplicates": duplicates, "invalid": invalid}
+
+
 def build_feedback_entry(question: str, sql: str, tags: list[str], doc: str) -> dict[str, Any]:
     """Build a JSON-serializable feedback entry."""
     return {
