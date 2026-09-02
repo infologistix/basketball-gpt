@@ -225,6 +225,31 @@ def score_entry(
     return score
 
 
+# Scores vary wildly in absolute scale between questions (a specific,
+# multi-clause question can score >15 on its best match; a short question
+# with little to key on tops out around 6) - a fixed absolute cutoff would
+# be too strict for one and too loose for the other. Filtering relative to
+# each question's own top score instead: keep an entry only if it comes
+# within this fraction of the best match, so a question whose real signal
+# is a tight cluster near the top isn't padded out with entries that only
+# scored via generic overlap (shared league tag, "Saison", "Spieler", ...).
+RELEVANCE_FLOOR_RATIO = 0.5
+
+
+def _rank_and_floor(
+    scored_entries: list[tuple[float, dict[str, Any]]], max_results: int
+) -> list[dict[str, Any]]:
+    """Rank scored entries and drop any below RELEVANCE_FLOOR_RATIO of the top score."""
+    ranked = sorted(scored_entries, key=lambda item: item[0], reverse=True)
+    ranked = [(score, entry) for score, entry in ranked if score > 0]
+    if not ranked:
+        return []
+    top_score = ranked[0][0]
+    floor = top_score * RELEVANCE_FLOOR_RATIO
+    kept = [entry for score, entry in ranked if score >= floor]
+    return kept[:max_results]
+
+
 def retrieve_examples(question: str, limit: int | None = None) -> list[dict[str, Any]]:
     """Return the most relevant curated examples for a user question."""
     if not rag_enabled():
@@ -239,8 +264,7 @@ def retrieve_examples(question: str, limit: int | None = None) -> list[dict[str,
         (score_entry(question_tokens, entry, question_tags), entry)
         for entry in load_entries()
     ]
-    ranked = [entry for score, entry in sorted(scored_entries, key=lambda item: item[0], reverse=True) if score > 0]
-    return ranked[:max_results]
+    return _rank_and_floor(scored_entries, max_results)
 
 
 def retrieve_rejected_examples(question: str, limit: int = 2) -> list[dict[str, Any]]:
@@ -253,8 +277,7 @@ def retrieve_rejected_examples(question: str, limit: int = 2) -> list[dict[str, 
         (score_entry(question_tokens, entry, question_tags), entry)
         for entry in load_rejected_entries()
     ]
-    ranked = [entry for score, entry in sorted(scored_entries, key=lambda item: item[0], reverse=True) if score > 0]
-    return ranked[:limit]
+    return _rank_and_floor(scored_entries, limit)
 
 
 def format_retrieved_context(question: str, limit: int | None = None) -> str:
@@ -265,7 +288,7 @@ def format_retrieved_context(question: str, limit: int | None = None) -> str:
 
     blocks = [
         "Relevant retrieved examples and notes:",
-        "Use these as patterns when they match the question. Do not copy a table name blindly if the user asks for another competition/schema.",
+        "If an example below addresses the same metric or question shape as the current question, you MUST reuse its column choice, thresholds, and filters unless you have a specific, stated reason not to - do not invent a different column when a retrieved example already solved this. Do not copy a table name blindly if the user asks for another competition/schema.",
     ]
     for index, example in enumerate(examples, start=1):
         blocks.append(f"\nExample {index}:")
