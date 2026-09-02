@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import re
+import zipfile
+from io import BytesIO
 from typing import Any
 from uuid import uuid4
 
@@ -14,7 +16,15 @@ from psycopg import Error as PostgresError
 from psycopg.rows import dict_row
 
 from db import connect, get_database_name, get_db_label, get_schemas
-from lightweight_rag import load_entries, load_rejected_entries, rag_enabled, save_bad_example, save_good_example
+from lightweight_rag import (
+    knowledge_path,
+    load_entries,
+    load_rejected_entries,
+    rag_enabled,
+    rejected_path,
+    save_bad_example,
+    save_good_example,
+)
 from query_engine import MissingApiKeyError, QueryEngineError, UnsafeSqlError, answer_question, classify_question
 
 
@@ -290,6 +300,16 @@ def render_schema_browser() -> None:
     st.dataframe(selected["columns"], hide_index=True, use_container_width=True)
 
 
+def knowledge_export_zip() -> bytes:
+    """Package sql_examples.json and rejected_sql_examples.json as two files in one ZIP."""
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in (knowledge_path(), rejected_path()):
+            if path.exists():
+                archive.write(path, arcname=path.name)
+    return buffer.getvalue()
+
+
 def sidebar() -> dict[str, str | None]:
     """Render sidebar controls and return the selected LLM configuration."""
     with st.sidebar:
@@ -331,6 +351,13 @@ def sidebar() -> dict[str, str | None]:
         rejected_column.metric("Abgelehnt", len(load_rejected_entries()))
         if not rag_enabled():
             st.caption("Retrieval ist deaktiviert (SQL_RAG_ENABLED)")
+        st.download_button(
+            "JSON exportieren (.zip)",
+            data=knowledge_export_zip(),
+            file_name="basketball_gpt_knowledge.zip",
+            mime="application/zip",
+            help="sql_examples.json und rejected_sql_examples.json als zwei Dateien in einem ZIP.",
+        )
 
         with st.expander("Verbindungsdetails"):
             st.code(get_db_label(), language=None)
