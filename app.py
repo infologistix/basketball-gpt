@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import zipfile
@@ -17,6 +18,7 @@ from psycopg.rows import dict_row
 
 from db import connect, get_database_name, get_db_label, get_schemas
 from lightweight_rag import (
+    import_good_examples,
     knowledge_path,
     load_entries,
     load_rejected_entries,
@@ -358,6 +360,26 @@ def sidebar() -> dict[str, str | None]:
             mime="application/zip",
             help="sql_examples.json und rejected_sql_examples.json als zwei Dateien in einem ZIP.",
         )
+        uploaded_knowledge_file = st.file_uploader(
+            "JSON hochladen (nur Gut)",
+            type="json",
+            key="knowledge_upload",
+            help="Wird an sql_examples.json angehängt. rejected_sql_examples.json wird dabei nie verändert.",
+        )
+        if uploaded_knowledge_file is not None:
+            try:
+                uploaded_entries = json.loads(uploaded_knowledge_file.getvalue().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                st.error(f"Datei ist kein gültiges JSON: {exc}")
+            else:
+                if not isinstance(uploaded_entries, list):
+                    st.error("Erwartet eine JSON-Liste von Einträgen (wie sql_examples.json).")
+                else:
+                    result = import_good_examples(uploaded_entries)
+                    st.success(
+                        f"{result['added']} hinzugefügt, {result['duplicates']} Duplikate übersprungen, "
+                        f"{result['invalid']} ungültig übersprungen."
+                    )
 
         with st.expander("Verbindungsdetails"):
             st.code(get_db_label(), language=None)
