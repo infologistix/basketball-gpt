@@ -578,6 +578,31 @@ def render_context_indicator(used_tokens: int, turns_used: int) -> None:
     )
 
 
+def previous_intent(messages: list[dict[str, Any]]) -> str | None:
+    """Return the intent of the most recent assistant turn, if any."""
+    for message in reversed(messages):
+        if message.get("role") == "assistant" and message.get("intent"):
+            return message["intent"]
+    return None
+
+
+def resolve_intent(question: str, prior_intent: str | None) -> str:
+    """Classify intent, inheriting "draw" for terse chart follow-ups.
+
+    classify_question() only looks at the current question's own keywords, so
+    a follow-up that deliberately omits them ("jetzt EL" after "... als
+    Balkendiagramm") gets classified as a plain answer and the chart silently
+    stops appearing - even though conversationally it is obviously still the
+    same chart request. Only "draw" is inherited: schema/table/debug_sql are
+    unambiguous enough from keywords alone that carrying them forward would be
+    more likely to misfire on an unrelated follow-up than help.
+    """
+    intent = classify_question(question)
+    if intent == "answer" and prior_intent == "draw":
+        return "draw"
+    return intent
+
+
 def build_history(messages: list[dict[str, Any]], limit: int = MAX_HISTORY_TURNS) -> list[tuple[str, str]]:
     """Extract the last `limit` (question, answer) turns from the chat history.
 
@@ -604,7 +629,9 @@ def render_chat() -> None:
                     if message.get("rows"):
                         st.dataframe(message["rows"], use_container_width=True)
                 render_result_summary(message.get("rows"), message.get("intent"))
-                render_result_chart(message.get("rows"), message.get("sql"), message.get("question"))
+                render_result_chart(
+                    message.get("rows"), message.get("sql"), message.get("question"), message.get("intent")
+                )
                 render_feedback_controls(
                     message,
                     key_prefix=message.get("feedback_id") or f"history_{index}",
@@ -676,11 +703,12 @@ def render_result_chart(
     rows: list[dict[str, Any]] | None,
     generated_sql: str | None = None,
     question: str | None = None,
+    intent: str | None = None,
 ) -> None:
     """Render chart tabs when the user explicitly asks to draw a chart."""
     if not rows:
         return
-    if not should_show_visualizations(question, generated_sql):
+    if not should_show_visualizations(intent):
         return
 
     df = pd.DataFrame(rows)
@@ -711,9 +739,9 @@ def render_result_chart(
                     render_histogram(df, numeric_columns, generated_sql)
 
 
-def should_show_visualizations(question: str | None, _generated_sql: str | None) -> bool:
+def should_show_visualizations(intent: str | None) -> bool:
     """Return whether a result should show visualization controls."""
-    return classify_question(question or "") == "draw"
+    return intent == "draw"
 
 
 def render_result_summary(rows: list[dict[str, Any]] | None, intent: str | None = None) -> None:
@@ -1118,8 +1146,7 @@ def main() -> None:
     # Built from what's already in session state, before the current question
     # is appended below - otherwise the current question would answer itself.
     history = build_history(st.session_state.messages)
-
-    intent = classify_question(question)
+    intent = resolve_intent(question, previous_intent(st.session_state.messages))
 
     # One id per answer, minted before the answer is rendered and stored with it.
     # The feedback buttons used to be keyed "current_answer" while live and
@@ -1136,7 +1163,9 @@ def main() -> None:
         with st.spinner("Erzeuge SQL und frage PostgreSQL ab …"):
             _rows = None
             try:
-                answer, sql, _rows = answer_question(question, history=history, **llm_config)
+                answer, sql, _rows = answer_question(
+                    question, history=history, intent_override=intent, **llm_config
+                )
             except MissingApiKeyError as exc:
                 answer = str(exc)
                 sql = None
@@ -1160,7 +1189,7 @@ def main() -> None:
                     if _rows:
                         st.dataframe(_rows, use_container_width=True)
                 render_result_summary(_rows, intent)
-                render_result_chart(_rows, sql, question)
+                render_result_chart(_rows, sql, question, intent)
                 render_feedback_controls(
                     {
                         "question": question,
