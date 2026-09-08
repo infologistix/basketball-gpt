@@ -533,6 +533,51 @@ def sidebar() -> dict[str, str | None]:
         }
 
 
+def format_compact_number(n: int) -> str:
+    """Format a token count like "572.9k" or "1M", matching a compact-stat style."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}".rstrip("0").rstrip(".") + "k"
+    return str(n)
+
+
+def render_context_indicator(used_tokens: int, turns_used: int) -> None:
+    """Render a compact context-usage card, styled like the app's stat cards."""
+    pct = used_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
+    # Same warm palette as the rest of the app (CHART_ACCENT, CHART_MUTED) -
+    # green/accent-orange/red only swap in as usage climbs, they are not new
+    # brand colors.
+    if pct < 50:
+        dot_color = "#5FA773"
+    elif pct < 80:
+        dot_color = CHART_ACCENT
+    else:
+        dot_color = "#C64B3C"
+    st.markdown(
+        f"""
+        <div style="
+            display:inline-flex; flex-direction:column; gap:2px;
+            background:#1A1611; border:1px solid {CHART_GRID}; border-radius:10px;
+            padding:8px 12px; margin-top:0.25rem;
+        ">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:8px; height:8px; border-radius:50%;
+                    background:{dot_color}; display:inline-block; flex-shrink:0;"></span>
+                <span style="color:{CHART_TEXT}; font-weight:600; font-size:0.95rem;">
+                    {pct:.0f}% Kontext verwendet
+                </span>
+            </div>
+            <div style="color:{CHART_MUTED}; font-size:0.82rem; padding-left:14px;">
+                Kontext {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)}
+                ({pct:.0f}%) · {turns_used} von {MAX_HISTORY_TURNS} Fragen im Verlauf
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def build_history(messages: list[dict[str, Any]], limit: int = MAX_HISTORY_TURNS) -> list[tuple[str, str]]:
     """Extract the last `limit` (question, answer) turns from the chat history.
 
@@ -1125,11 +1170,7 @@ def main() -> None:
                     key_prefix=feedback_id,
                 )
                 used_tokens = estimate_context_size(question, history=history)
-                st.caption(
-                    f"≈ {used_tokens:,} / {MAX_CONTEXT_TOKENS:,} Tokens geschätzter Kontext "
-                    f"für diese Anfrage · {len(history)} von max. {MAX_HISTORY_TURNS} "
-                    "vorherigen Fragen im Verlauf berücksichtigt."
-                )
+                render_context_indicator(used_tokens, len(history))
 
     st.session_state.messages.append(
         {
