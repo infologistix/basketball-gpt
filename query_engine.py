@@ -638,9 +638,16 @@ def generate_sql(
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
     history: list[tuple[str, str]] | None = None,
+    intent_override: str | None = None,
 ) -> str:
-    """Generate, extract, validate, and lightly improve SQL for a question."""
-    intent = classify_question(question)
+    """Generate, extract, validate, and lightly improve SQL for a question.
+
+    intent_override lets a caller pass an already-resolved intent (e.g. one
+    that inherited "draw" from a terse follow-up like "now for the EuroLeague"
+    that dropped the original chart keywords) instead of re-classifying this
+    question's text alone, which cannot see that context.
+    """
+    intent = intent_override or classify_question(question)
     retrieved_context = format_retrieved_context(question)
     rejected_context = format_rejected_context(question)
     history_context = format_history_context(history)
@@ -680,9 +687,10 @@ def repair_sql(
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
     history: list[tuple[str, str]] | None = None,
+    intent_override: str | None = None,
 ) -> str:
     """Ask the LLM to repair a failed SQL statement using the DB error."""
-    intent = classify_question(question)
+    intent = intent_override or classify_question(question)
     retrieved_context = format_retrieved_context(question)
     rejected_context = format_rejected_context(question)
     history_context = format_history_context(history)
@@ -1039,13 +1047,15 @@ def answer_question(
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
     history: list[tuple[str, str]] | None = None,
+    intent_override: str | None = None,
 ) -> tuple[str, str, list[dict[str, Any]]]:
     """Answer a user question by routing, generating SQL, and summarizing rows.
 
     history is a list of (question, answer) tuples from earlier turns in the
     same chat session, oldest first - used only to resolve follow-up phrasing
     ("and last season?"); the schema/known-chart shortcuts below never need it
-    since they do not call the LLM at all.
+    since they do not call the LLM at all. intent_override is likewise passed
+    straight through to generate_sql/repair_sql - see their docstrings.
     """
     schema_answer = answer_schema_question(question, db_path=db_path)
     if schema_answer is not None:
@@ -1066,6 +1076,7 @@ def answer_question(
         openai_api_key=openai_api_key,
         openai_base_url=openai_base_url,
         history=history,
+        intent_override=intent_override,
     )
     try:
         rows = execute_sql(sql, db_path=db_path)
@@ -1083,6 +1094,7 @@ def answer_question(
             openai_api_key=openai_api_key,
             openai_base_url=openai_base_url,
             history=history,
+            intent_override=intent_override,
         )
         rows = execute_sql(repaired_sql, db_path=db_path)
         sql = repaired_sql

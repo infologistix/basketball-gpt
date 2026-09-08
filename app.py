@@ -542,40 +542,77 @@ def format_compact_number(n: int) -> str:
     return str(n)
 
 
-def render_context_indicator(used_tokens: int, turns_used: int) -> None:
-    """Render a compact context-usage card, styled like the app's stat cards."""
+def render_context_indicator(used_tokens: int, turn_number: int) -> None:
+    """Render a context-window usage card with a progress bar, Claude-style.
+
+    turn_number is 1-indexed - the question just answered counts as turn 1,
+    not turn 0, matching how a person would count "this is my Nth question"
+    rather than "N prior turns were resent as history".
+    """
     pct = used_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
     # Same warm palette as the rest of the app (CHART_ACCENT, CHART_MUTED) -
     # green/accent-orange/red only swap in as usage climbs, they are not new
     # brand colors.
     if pct < 50:
-        dot_color = "#5FA773"
+        bar_color = "#5FA773"
     elif pct < 80:
-        dot_color = CHART_ACCENT
+        bar_color = CHART_ACCENT
     else:
-        dot_color = "#C64B3C"
+        bar_color = "#C64B3C"
+    fill_pct = min(100.0, pct)
     st.markdown(
         f"""
         <div style="
-            display:inline-flex; flex-direction:column; gap:2px;
             background:#1A1611; border:1px solid {CHART_GRID}; border-radius:10px;
-            padding:8px 12px; margin-top:0.25rem;
+            padding:10px 14px; margin-top:0.25rem;
         ">
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:8px; height:8px; border-radius:50%;
-                    background:{dot_color}; display:inline-block; flex-shrink:0;"></span>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <span style="color:{CHART_TEXT}; font-weight:600; font-size:0.95rem;">
-                    {pct:.0f}% Kontext verwendet
+                    Kontext-Fenster
+                </span>
+                <span style="color:{CHART_TEXT}; font-size:0.85rem;">
+                    {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)} ({pct:.0f}%)
                 </span>
             </div>
-            <div style="color:{CHART_MUTED}; font-size:0.82rem; padding-left:14px;">
-                Kontext {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)}
-                ({pct:.0f}%) · {turns_used} von {MAX_HISTORY_TURNS} Fragen im Verlauf
+            <div style="
+                background:{CHART_GRID}; border-radius:4px; height:6px;
+                margin-top:6px; overflow:hidden;
+            ">
+                <div style="width:{fill_pct:.2f}%; height:100%; background:{bar_color};
+                    border-radius:4px;"></div>
+            </div>
+            <div style="color:{CHART_MUTED}; font-size:0.8rem; margin-top:6px;">
+                Frage {turn_number} von max. {MAX_HISTORY_TURNS} im berücksichtigten Verlauf
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def previous_intent(messages: list[dict[str, Any]]) -> str | None:
+    """Return the intent of the most recent assistant turn, if any."""
+    for message in reversed(messages):
+        if message.get("role") == "assistant" and message.get("intent"):
+            return message["intent"]
+    return None
+
+
+def resolve_intent(question: str, prior_intent: str | None) -> str:
+    """Classify intent, inheriting "draw" for terse chart follow-ups.
+
+    classify_question() only looks at the current question's own keywords, so
+    a follow-up that deliberately omits them ("jetzt EL" after "... als
+    Balkendiagramm") gets classified as a plain answer and the chart silently
+    stops appearing - even though conversationally it is obviously still the
+    same chart request. Only "draw" is inherited: schema/table/debug_sql are
+    unambiguous enough from keywords alone that carrying them forward would be
+    more likely to misfire on an unrelated follow-up than help.
+    """
+    intent = classify_question(question)
+    if intent == "answer" and prior_intent == "draw":
+        return "draw"
+    return intent
 
 
 def build_history(messages: list[dict[str, Any]], limit: int = MAX_HISTORY_TURNS) -> list[tuple[str, str]]:
@@ -604,7 +641,9 @@ def render_chat() -> None:
                     if message.get("rows"):
                         st.dataframe(message["rows"], use_container_width=True)
                 render_result_summary(message.get("rows"), message.get("intent"))
-                render_result_chart(message.get("rows"), message.get("sql"), message.get("question"))
+                render_result_chart(
+                    message.get("rows"), message.get("sql"), message.get("question"), message.get("intent")
+                )
                 render_feedback_controls(
                     message,
                     key_prefix=message.get("feedback_id") or f"history_{index}",
@@ -676,11 +715,12 @@ def render_result_chart(
     rows: list[dict[str, Any]] | None,
     generated_sql: str | None = None,
     question: str | None = None,
+    intent: str | None = None,
 ) -> None:
     """Render chart tabs when the user explicitly asks to draw a chart."""
     if not rows:
         return
-    if not should_show_visualizations(question, generated_sql):
+    if not should_show_visualizations(intent):
         return
 
     df = pd.DataFrame(rows)
@@ -711,9 +751,9 @@ def render_result_chart(
                     render_histogram(df, numeric_columns, generated_sql)
 
 
-def should_show_visualizations(question: str | None, _generated_sql: str | None) -> bool:
+def should_show_visualizations(intent: str | None) -> bool:
     """Return whether a result should show visualization controls."""
-    return classify_question(question or "") == "draw"
+    return intent == "draw"
 
 
 def render_result_summary(rows: list[dict[str, Any]] | None, intent: str | None = None) -> None:
@@ -1118,8 +1158,7 @@ def main() -> None:
     # Built from what's already in session state, before the current question
     # is appended below - otherwise the current question would answer itself.
     history = build_history(st.session_state.messages)
-
-    intent = classify_question(question)
+    intent = resolve_intent(question, previous_intent(st.session_state.messages))
 
     # One id per answer, minted before the answer is rendered and stored with it.
     # The feedback buttons used to be keyed "current_answer" while live and
@@ -1136,7 +1175,9 @@ def main() -> None:
         with st.spinner("Erzeuge SQL und frage PostgreSQL ab …"):
             _rows = None
             try:
-                answer, sql, _rows = answer_question(question, history=history, **llm_config)
+                answer, sql, _rows = answer_question(
+                    question, history=history, intent_override=intent, **llm_config
+                )
             except MissingApiKeyError as exc:
                 answer = str(exc)
                 sql = None
@@ -1160,7 +1201,7 @@ def main() -> None:
                     if _rows:
                         st.dataframe(_rows, use_container_width=True)
                 render_result_summary(_rows, intent)
-                render_result_chart(_rows, sql, question)
+                render_result_chart(_rows, sql, question, intent)
                 render_feedback_controls(
                     {
                         "question": question,
@@ -1170,7 +1211,7 @@ def main() -> None:
                     key_prefix=feedback_id,
                 )
                 used_tokens = estimate_context_size(question, history=history)
-                render_context_indicator(used_tokens, len(history))
+                render_context_indicator(used_tokens, len(history) + 1)
 
     st.session_state.messages.append(
         {
