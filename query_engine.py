@@ -31,6 +31,16 @@ MAX_QUERY_ROWS = int(os.getenv("MAX_QUERY_ROWS", "5000"))
 # unset here) just adds run-to-run variance on whether an already-answered rule gets
 # followed. Low but nonzero so a stuck/repeated generation still has room to vary.
 SQL_GENERATION_TEMPERATURE = float(os.getenv("SQL_GENERATION_TEMPERATURE", "0.1"))
+# Confirmed live against the underlying vLLM server's /v1/models endpoint
+# (max_model_len), not a guess from the model name - used only to show an
+# approximate context-usage indicator in the UI, not to enforce a limit.
+MAX_CONTEXT_TOKENS = 262_144
+# Chat turns (question+answer pairs) kept and resent as conversation history
+# on each follow-up question. The context window is far larger than this
+# needs, but every turn re-sends the whole history to a stateless completions
+# API, so an unbounded history keeps making every later question slower and
+# more expensive - capped instead of relying on the window as the only guard.
+MAX_HISTORY_TURNS = 10
 
 SCHEMA_PROMPT_TEMPLATE = """
 You are writing PostgreSQL SELECT queries for a basketball analytics database.
@@ -563,6 +573,60 @@ def intent_instruction(intent: str) -> str:
     return instructions.get(intent, instructions["answer"])
 
 
+def format_history_context(history: list[tuple[str, str]] | None) -> str:
+    """Build a conversation-so-far block from prior (question, answer) turns.
+
+    Capped defensively even if a caller passes more than MAX_HISTORY_TURNS -
+    the cap is what keeps a long session from resending an ever-growing
+    prompt to a stateless completions API on every single follow-up.
+    """
+    if not history:
+        return ""
+    trimmed = history[-MAX_HISTORY_TURNS:]
+    lines = [
+        "Conversation so far (use this to resolve follow-ups like \"and last "
+        "season?\" or \"same for the EuroLeague?\" against the prior question, "
+        "but always re-derive the SQL fresh for the CURRENT question below - "
+        "do not just repeat a previous answer):"
+    ]
+    for prior_question, prior_answer in trimmed:
+        lines.append(f"Q: {prior_question}")
+        lines.append(f"A: {prior_answer}")
+    return "\n".join(lines)
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough token-count estimate (~4 chars/token), for a UI indicator only.
+
+    Not a real tokenizer - this app has no tokenizer dependency, and an
+    approximation is enough to show whether a session is anywhere near the
+    262k window, not to enforce anything.
+    """
+    return max(0, len(text)) // 4
+
+
+def estimate_context_size(
+    question: str,
+    history: list[tuple[str, str]] | None = None,
+    db_path: str | None = None,
+) -> int:
+    """Estimate the prompt token count for a question, for display only."""
+    intent = classify_question(question)
+    retrieved_context = format_retrieved_context(question)
+    rejected_context = format_rejected_context(question)
+    history_context = format_history_context(history)
+    prompt_parts = [intent_instruction(intent)]
+    if history_context:
+        prompt_parts.append(history_context)
+    if retrieved_context:
+        prompt_parts.append(retrieved_context)
+    if rejected_context:
+        prompt_parts.append(rejected_context)
+    prompt_parts.append(f"Question: {question}")
+    full_text = get_schema_prompt(db_path=db_path) + "\n\n" + "\n\n".join(prompt_parts)
+    return estimate_tokens(full_text)
+
+
 def generate_sql(
     question: str,
     db_path: str | None = None,
@@ -573,12 +637,16 @@ def generate_sql(
     ollama_base_url: str | None = None,
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> str:
     """Generate, extract, validate, and lightly improve SQL for a question."""
     intent = classify_question(question)
     retrieved_context = format_retrieved_context(question)
     rejected_context = format_rejected_context(question)
+    history_context = format_history_context(history)
     prompt_parts = [intent_instruction(intent)]
+    if history_context:
+        prompt_parts.append(history_context)
     if retrieved_context:
         prompt_parts.append(retrieved_context)
     if rejected_context:
@@ -611,15 +679,19 @@ def repair_sql(
     ollama_base_url: str | None = None,
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> str:
     """Ask the LLM to repair a failed SQL statement using the DB error."""
     intent = classify_question(question)
     retrieved_context = format_retrieved_context(question)
     rejected_context = format_rejected_context(question)
+    history_context = format_history_context(history)
     prompt = f"""
 The previous PostgreSQL query failed. Rewrite it as one valid, safe SELECT statement.
 
 {intent_instruction(intent)}
+
+{history_context}
 
 {retrieved_context}
 
@@ -966,8 +1038,15 @@ def answer_question(
     ollama_base_url: str | None = None,
     openai_api_key: str | None = None,
     openai_base_url: str | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, str, list[dict[str, Any]]]:
-    """Answer a user question by routing, generating SQL, and summarizing rows."""
+    """Answer a user question by routing, generating SQL, and summarizing rows.
+
+    history is a list of (question, answer) tuples from earlier turns in the
+    same chat session, oldest first - used only to resolve follow-up phrasing
+    ("and last season?"); the schema/known-chart shortcuts below never need it
+    since they do not call the LLM at all.
+    """
     schema_answer = answer_schema_question(question, db_path=db_path)
     if schema_answer is not None:
         return schema_answer
@@ -986,6 +1065,7 @@ def answer_question(
         ollama_base_url=ollama_base_url,
         openai_api_key=openai_api_key,
         openai_base_url=openai_base_url,
+        history=history,
     )
     try:
         rows = execute_sql(sql, db_path=db_path)
@@ -1002,6 +1082,7 @@ def answer_question(
             ollama_base_url=ollama_base_url,
             openai_api_key=openai_api_key,
             openai_base_url=openai_base_url,
+            history=history,
         )
         rows = execute_sql(repaired_sql, db_path=db_path)
         sql = repaired_sql
