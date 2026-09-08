@@ -542,35 +542,47 @@ def format_compact_number(n: int) -> str:
     return str(n)
 
 
-def render_context_indicator(used_tokens: int, turns_used: int) -> None:
-    """Render a compact context-usage card, styled like the app's stat cards."""
+def render_context_indicator(used_tokens: int, turn_number: int) -> None:
+    """Render a context-window usage card with a progress bar, Claude-style.
+
+    turn_number is 1-indexed - the question just answered counts as turn 1,
+    not turn 0, matching how a person would count "this is my Nth question"
+    rather than "N prior turns were resent as history".
+    """
     pct = used_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
     # Same warm palette as the rest of the app (CHART_ACCENT, CHART_MUTED) -
     # green/accent-orange/red only swap in as usage climbs, they are not new
     # brand colors.
     if pct < 50:
-        dot_color = "#5FA773"
+        bar_color = "#5FA773"
     elif pct < 80:
-        dot_color = CHART_ACCENT
+        bar_color = CHART_ACCENT
     else:
-        dot_color = "#C64B3C"
+        bar_color = "#C64B3C"
+    fill_pct = min(100.0, pct)
     st.markdown(
         f"""
         <div style="
-            display:inline-flex; flex-direction:column; gap:2px;
             background:#1A1611; border:1px solid {CHART_GRID}; border-radius:10px;
-            padding:8px 12px; margin-top:0.25rem;
+            padding:10px 14px; margin-top:0.25rem;
         ">
-            <div style="display:flex; align-items:center; gap:6px;">
-                <span style="width:8px; height:8px; border-radius:50%;
-                    background:{dot_color}; display:inline-block; flex-shrink:0;"></span>
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <span style="color:{CHART_TEXT}; font-weight:600; font-size:0.95rem;">
-                    {pct:.0f}% Kontext verwendet
+                    Kontext-Fenster
+                </span>
+                <span style="color:{CHART_TEXT}; font-size:0.85rem;">
+                    {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)} ({pct:.0f}%)
                 </span>
             </div>
-            <div style="color:{CHART_MUTED}; font-size:0.82rem; padding-left:14px;">
-                Kontext {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)}
-                ({pct:.0f}%) · {turns_used} von {MAX_HISTORY_TURNS} Fragen im Verlauf
+            <div style="
+                background:{CHART_GRID}; border-radius:4px; height:6px;
+                margin-top:6px; overflow:hidden;
+            ">
+                <div style="width:{fill_pct:.2f}%; height:100%; background:{bar_color};
+                    border-radius:4px;"></div>
+            </div>
+            <div style="color:{CHART_MUTED}; font-size:0.8rem; margin-top:6px;">
+                Frage {turn_number} von max. {MAX_HISTORY_TURNS} im berücksichtigten Verlauf
             </div>
         </div>
         """,
@@ -1199,7 +1211,7 @@ def main() -> None:
                     key_prefix=feedback_id,
                 )
                 used_tokens = estimate_context_size(question, history=history)
-                render_context_indicator(used_tokens, len(history))
+                render_context_indicator(used_tokens, len(history) + 1)
 
     st.session_state.messages.append(
         {
