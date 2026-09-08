@@ -27,7 +27,16 @@ from lightweight_rag import (
     save_bad_example,
     save_good_example,
 )
-from query_engine import MissingApiKeyError, QueryEngineError, UnsafeSqlError, answer_question, classify_question
+from query_engine import (
+    MAX_CONTEXT_TOKENS,
+    MAX_HISTORY_TURNS,
+    MissingApiKeyError,
+    QueryEngineError,
+    UnsafeSqlError,
+    answer_question,
+    classify_question,
+    estimate_context_size,
+)
 
 
 load_dotenv()
@@ -524,6 +533,66 @@ def sidebar() -> dict[str, str | None]:
         }
 
 
+def format_compact_number(n: int) -> str:
+    """Format a token count like "572.9k" or "1M", matching a compact-stat style."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}".rstrip("0").rstrip(".") + "k"
+    return str(n)
+
+
+def render_context_indicator(used_tokens: int, turns_used: int) -> None:
+    """Render a compact context-usage card, styled like the app's stat cards."""
+    pct = used_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
+    # Same warm palette as the rest of the app (CHART_ACCENT, CHART_MUTED) -
+    # green/accent-orange/red only swap in as usage climbs, they are not new
+    # brand colors.
+    if pct < 50:
+        dot_color = "#5FA773"
+    elif pct < 80:
+        dot_color = CHART_ACCENT
+    else:
+        dot_color = "#C64B3C"
+    st.markdown(
+        f"""
+        <div style="
+            display:inline-flex; flex-direction:column; gap:2px;
+            background:#1A1611; border:1px solid {CHART_GRID}; border-radius:10px;
+            padding:8px 12px; margin-top:0.25rem;
+        ">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:8px; height:8px; border-radius:50%;
+                    background:{dot_color}; display:inline-block; flex-shrink:0;"></span>
+                <span style="color:{CHART_TEXT}; font-weight:600; font-size:0.95rem;">
+                    {pct:.0f}% Kontext verwendet
+                </span>
+            </div>
+            <div style="color:{CHART_MUTED}; font-size:0.82rem; padding-left:14px;">
+                Kontext {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)}
+                ({pct:.0f}%) · {turns_used} von {MAX_HISTORY_TURNS} Fragen im Verlauf
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def build_history(messages: list[dict[str, Any]], limit: int = MAX_HISTORY_TURNS) -> list[tuple[str, str]]:
+    """Extract the last `limit` (question, answer) turns from the chat history.
+
+    Only assistant messages carry both the original "question" and its
+    "content" (the answer) - the static opening greeting has neither, so it
+    is skipped automatically rather than needing an explicit index check.
+    """
+    turns = [
+        (message["question"], message["content"])
+        for message in messages
+        if message.get("role") == "assistant" and message.get("question")
+    ]
+    return turns[-limit:]
+
+
 def render_chat() -> None:
     """Replay chat history with SQL, result summaries, and optional charts."""
     for index, message in enumerate(st.session_state.messages):
@@ -1001,6 +1070,23 @@ def render_histogram(df: pd.DataFrame, numeric_columns: list[str], generated_sql
     st.altair_chart(style_chart(chart), use_container_width=True)
 
 
+def initial_messages() -> list[dict[str, Any]]:
+    """Return the fresh-session greeting, shared by first load and /clear."""
+    return [
+        {
+            "role": "assistant",
+            # The three examples used to be repeated here as inline code,
+            # which broke the sentence into blocks and duplicated what the
+            # starter buttons above already show.
+            "content": (
+                "Frag nach Spielern, Teams, Spielen oder Statistiken aus BBL, "
+                "EuroLeague, EuroCup und Champions League. "
+                "Die Buttons oben sind ein Startpunkt."
+            ),
+        }
+    ]
+
+
 def main() -> None:
     """Run the Streamlit basketball analytics chat application."""
     ensure_database()
@@ -1011,19 +1097,7 @@ def main() -> None:
     st.write("Stell Fragen zu den Basketball-Daten in bronze, silver und gold.")
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                # The three examples used to be repeated here as inline code,
-                # which broke the sentence into blocks and duplicated what the
-                # starter buttons above already show.
-                "content": (
-                    "Frag nach Spielern, Teams, Spielen oder Statistiken aus BBL, "
-                    "EuroLeague, EuroCup und Champions League. "
-                    "Die Buttons oben sind ein Startpunkt."
-                ),
-            }
-        ]
+        st.session_state.messages = initial_messages()
 
     starter_question = render_starter_questions()
     render_chat()
@@ -1032,6 +1106,19 @@ def main() -> None:
     question = starter_question or typed_question
     if not question:
         return
+
+    # /clear only resets the follow-up conversation kept in this session - the
+    # SQL-Gedaechtnis (Gut/Abgelehnt, on the PVC) and the domain notes baked
+    # into the system prompt are untouched by it, on purpose.
+    if question.strip().lower() == "/clear":
+        st.session_state.messages = initial_messages()
+        st.rerun()
+        return
+
+    # Built from what's already in session state, before the current question
+    # is appended below - otherwise the current question would answer itself.
+    history = build_history(st.session_state.messages)
+
     intent = classify_question(question)
 
     # One id per answer, minted before the answer is rendered and stored with it.
@@ -1049,7 +1136,7 @@ def main() -> None:
         with st.spinner("Erzeuge SQL und frage PostgreSQL ab …"):
             _rows = None
             try:
-                answer, sql, _rows = answer_question(question, **llm_config)
+                answer, sql, _rows = answer_question(question, history=history, **llm_config)
             except MissingApiKeyError as exc:
                 answer = str(exc)
                 sql = None
@@ -1082,6 +1169,8 @@ def main() -> None:
                     },
                     key_prefix=feedback_id,
                 )
+                used_tokens = estimate_context_size(question, history=history)
+                render_context_indicator(used_tokens, len(history))
 
     st.session_state.messages.append(
         {
