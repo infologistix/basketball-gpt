@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import re
 import json
+import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import date
@@ -41,6 +43,12 @@ MAX_CONTEXT_TOKENS = 262_144
 # API, so an unbounded history keeps making every later question slower and
 # more expensive - capped instead of relying on the window as the only guard.
 MAX_HISTORY_TURNS = 10
+# get_schema_prompt() previously hit Postgres on every single call - and it's
+# called 2-3 times per question (SQL generation, the context-window
+# indicator, and again on SQL repair), not once. The schema only actually
+# changes after a migration, not between chat turns, so a short TTL removes
+# that repeat round-trip cost without risking a long-lived stale schema.
+SCHEMA_PROMPT_CACHE_TTL_SECONDS = float(os.getenv("SCHEMA_PROMPT_CACHE_TTL_SECONDS", "300"))
 
 SCHEMA_PROMPT_TEMPLATE = """
 You are writing PostgreSQL SELECT queries for a basketball analytics database.
@@ -490,8 +498,38 @@ def has_draw_visualization_intent(question: str | None) -> bool:
     return any(word in normalized for word in draw_words + visualization_words)
 
 
+_schema_prompt_cache: dict[str | None, tuple[float, str]] = {}
+_schema_prompt_cache_lock = threading.Lock()
+
+
 def get_schema_prompt(db_path: str | None = None) -> str:
-    """Build the LLM system prompt from live database schema metadata."""
+    """Build the LLM system prompt from live database schema metadata.
+
+    Cached per db_path for SCHEMA_PROMPT_CACHE_TTL_SECONDS - see the constant's
+    comment for why. Bypass with clear_schema_prompt_cache() right after a
+    migration if the running pod needs the new schema before the TTL expires.
+    """
+    now = time.monotonic()
+    with _schema_prompt_cache_lock:
+        cached = _schema_prompt_cache.get(db_path)
+        if cached is not None and now - cached[0] < SCHEMA_PROMPT_CACHE_TTL_SECONDS:
+            return cached[1]
+
+    prompt = _fetch_schema_prompt(db_path)
+
+    with _schema_prompt_cache_lock:
+        _schema_prompt_cache[db_path] = (now, prompt)
+    return prompt
+
+
+def clear_schema_prompt_cache() -> None:
+    """Drop all cached schema prompts, forcing the next call to refetch."""
+    with _schema_prompt_cache_lock:
+        _schema_prompt_cache.clear()
+
+
+def _fetch_schema_prompt(db_path: str | None) -> str:
+    """Build the LLM system prompt from a live database schema query."""
     schemas = get_schemas()
     default_schema = get_default_schema()
     try:

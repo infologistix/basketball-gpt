@@ -624,47 +624,6 @@ def render_context_indicator(base_tokens: int, history_tokens: int, turn_number:
     )
 
 
-def render_context_pie(base_tokens: int, history_tokens: int) -> None:
-    """Render a donut chart of the Basis/Verlauf split as the card above.
-
-    Deliberately just these two slices, not a third "Frei" slice for the
-    unused rest of the window: with typical usage at a few percent of
-    MAX_CONTEXT_TOKENS, a "Frei" slice would swallow the whole donut and (in
-    this dark theme) be nearly invisible against the card background,
-    burying the one comparison this chart exists to show. Overall window
-    fill is already the bar above - this is only about the ratio between
-    the two things that make it up.
-    """
-    total = base_tokens + history_tokens
-    if total <= 0:
-        return
-    data = pd.DataFrame(
-        {
-            "segment": ["Basis", "Verlauf"],
-            "tokens": [base_tokens, history_tokens],
-        }
-    )
-    chart = (
-        alt.Chart(data)
-        .mark_arc(innerRadius=42, outerRadius=72, stroke="#1A1611", strokeWidth=2)
-        .encode(
-            theta=alt.Theta("tokens:Q", stack=True),
-            color=alt.Color(
-                "segment:N",
-                scale=alt.Scale(domain=["Basis", "Verlauf"], range=[CHART_ACCENT, "#5FA773"]),
-                legend=alt.Legend(title=None, orient="right", labelFontSize=12),
-            ),
-            order=alt.Order("tokens:Q", sort="descending"),
-            tooltip=[
-                alt.Tooltip("segment:N", title=""),
-                alt.Tooltip("tokens:Q", title="Tokens", format=","),
-            ],
-        )
-        .properties(width=160, height=160)
-    )
-    st.altair_chart(style_chart(chart), use_container_width=False)
-
-
 def previous_intent(messages: list[dict[str, Any]]) -> str | None:
     """Return the intent of the most recent assistant turn, if any."""
     for message in reversed(messages):
@@ -1337,11 +1296,7 @@ def main() -> None:
                     key_prefix=feedback_id,
                 )
                 base_tokens, history_tokens, _ = estimate_context_breakdown(question, history=history)
-                indicator_col, pie_col = st.columns([3, 1])
-                with indicator_col:
-                    render_context_indicator(base_tokens, history_tokens, len(history) + 1)
-                with pie_col:
-                    render_context_pie(base_tokens, history_tokens)
+                render_context_indicator(base_tokens, history_tokens, len(history) + 1)
 
     st.session_state.messages.append(
         {
