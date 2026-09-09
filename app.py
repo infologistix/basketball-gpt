@@ -490,7 +490,7 @@ def sidebar() -> dict[str, str | None]:
             )
             openai_model = st.text_input(
                 "KubeSpectra Modell",
-                value=st.session_state.get("openai_model", os.getenv("OPENAI_MODEL", "qwen3.6-35b-a3b-coder")),
+                value=st.session_state.get("openai_model", os.getenv("OPENAI_MODEL", "qwen3.8-27b")),
             )
             openai_api_key = st.text_input(
                 "KubeSpectra API-Key",
