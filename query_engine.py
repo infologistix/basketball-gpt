@@ -23,7 +23,7 @@ DEFAULT_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com/api")
 DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-coder:480b-cloud")
 # In-cluster LiteLLM proxy (OpenAI-compatible), same pattern as the sibling "datachat" app.
 DEFAULT_OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "http://litellm.litellm.svc.cluster.local:4000/v1")
-DEFAULT_OPENAI_MODEL = os.getenv("OPENAI_MODEL", "qwen3.6-35b-a3b-coder")
+DEFAULT_OPENAI_MODEL = os.getenv("OPENAI_MODEL", "qwen3.8-27b")
 MAX_QUERY_ROWS = int(os.getenv("MAX_QUERY_ROWS", "5000"))
 # SQL generation should be deterministic-ish, not creative: the system prompt already
 # spells out the correct column/threshold/join for every documented trap, so a high
