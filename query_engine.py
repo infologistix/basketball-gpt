@@ -45,10 +45,12 @@ MAX_CONTEXT_TOKENS = 262_144
 MAX_HISTORY_TURNS = 10
 # get_schema_prompt() previously hit Postgres on every single call - and it's
 # called 2-3 times per question (SQL generation, the context-window
-# indicator, and again on SQL repair), not once. The schema only actually
-# changes after a migration, not between chat turns, so a short TTL removes
-# that repeat round-trip cost without risking a long-lived stale schema.
-SCHEMA_PROMPT_CACHE_TTL_SECONDS = float(os.getenv("SCHEMA_PROMPT_CACHE_TTL_SECONDS", "300"))
+# indicator, and again on SQL repair), not once. Schema changes (CREATE/ALTER
+# TABLE) are rare here, not routine, so an hour is conservative rather than
+# reckless - and the pod restarts on every deploy anyway, which is when a
+# schema change would actually need to take effect in this workflow. Use
+# clear_schema_prompt_cache() to force a refetch sooner if ever needed.
+SCHEMA_PROMPT_CACHE_TTL_SECONDS = float(os.getenv("SCHEMA_PROMPT_CACHE_TTL_SECONDS", "3600"))
 
 SCHEMA_PROMPT_TEMPLATE = """
 You are writing PostgreSQL SELECT queries for a basketball analytics database.
