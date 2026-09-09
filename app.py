@@ -35,7 +35,7 @@ from query_engine import (
     UnsafeSqlError,
     answer_question,
     classify_question,
-    estimate_context_size,
+    estimate_context_breakdown,
 )
 
 
@@ -542,14 +542,25 @@ def format_compact_number(n: int) -> str:
     return str(n)
 
 
-def render_context_indicator(used_tokens: int, turn_number: int) -> None:
+def render_context_indicator(base_tokens: int, history_tokens: int, turn_number: int) -> None:
     """Render a context-window usage card with a progress bar, Claude-style.
+
+    The total/bar/percentage reflect the true estimate (base_tokens +
+    history_tokens), so the top line stays accurate. But the total alone
+    isn't a great "fill level" metric here, since base_tokens (schema,
+    domain notes, retrieved examples) varies question to question with
+    which examples get retrieved - a variance that's bigger than one turn's
+    worth of history growth, so the bar can visibly shrink between turns
+    even though nothing was forgotten. Splitting it into base (stable) and
+    history (the part that actually only grows, up to MAX_HISTORY_TURNS)
+    shows what's really accumulating.
 
     turn_number is 1-indexed - the question just answered counts as turn 1,
     not turn 0, matching how a person would count "this is my Nth question"
     rather than "N prior turns were resent as history".
     """
-    pct = used_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
+    total_tokens = base_tokens + history_tokens
+    pct = total_tokens / MAX_CONTEXT_TOKENS * 100 if MAX_CONTEXT_TOKENS else 0
     # Same warm palette as the rest of the app (CHART_ACCENT, CHART_MUTED) -
     # green/accent-orange/red only swap in as usage climbs, they are not new
     # brand colors.
@@ -568,10 +579,10 @@ def render_context_indicator(used_tokens: int, turn_number: int) -> None:
         ">
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <span style="color:{CHART_TEXT}; font-weight:600; font-size:0.95rem;">
-                    Kontext-Fenster
+                    Kontextfenster
                 </span>
                 <span style="color:{CHART_TEXT}; font-size:0.85rem;">
-                    {format_compact_number(used_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)} ({pct:.0f}%)
+                    {format_compact_number(total_tokens)} / {format_compact_number(MAX_CONTEXT_TOKENS)} ({pct:.0f}%)
                 </span>
             </div>
             <div style="
@@ -581,8 +592,12 @@ def render_context_indicator(used_tokens: int, turn_number: int) -> None:
                 <div style="width:{fill_pct:.2f}%; height:100%; background:{bar_color};
                     border-radius:4px;"></div>
             </div>
-            <div style="color:{CHART_MUTED}; font-size:0.8rem; margin-top:6px;">
-                Frage {turn_number} von max. {MAX_HISTORY_TURNS} im berücksichtigten Verlauf
+            <div style="
+                color:{CHART_MUTED}; font-size:0.8rem; margin-top:6px;
+                display:flex; justify-content:space-between; gap:12px;
+            ">
+                <span>Basis (Schema &amp; Beispiele): {format_compact_number(base_tokens)}</span>
+                <span>Gesprächsverlauf: {format_compact_number(history_tokens)} · Frage {turn_number}/{MAX_HISTORY_TURNS}</span>
             </div>
         </div>
         """,
@@ -1210,8 +1225,8 @@ def main() -> None:
                     },
                     key_prefix=feedback_id,
                 )
-                used_tokens = estimate_context_size(question, history=history)
-                render_context_indicator(used_tokens, len(history) + 1)
+                base_tokens, history_tokens, _ = estimate_context_breakdown(question, history=history)
+                render_context_indicator(base_tokens, history_tokens, len(history) + 1)
 
     st.session_state.messages.append(
         {
