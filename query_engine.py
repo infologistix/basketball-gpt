@@ -605,26 +605,49 @@ def estimate_tokens(text: str) -> int:
     return max(0, len(text)) // 4
 
 
+def estimate_context_breakdown(
+    question: str,
+    history: list[tuple[str, str]] | None = None,
+    db_path: str | None = None,
+) -> tuple[int, int, int]:
+    """Split the estimated prompt size into (base, history, total) tokens.
+
+    base = schema/domain notes + retrieved/rejected examples + the question
+    itself - this varies a little question to question (which examples get
+    retrieved), but does not grow with the conversation, so it's not
+    meaningful to display as if it were accumulating.
+
+    history = just the "conversation so far" block: 0 on the first question,
+    then strictly growing each turn up to the MAX_HISTORY_TURNS cap - this is
+    the only part of the total that actually behaves like a running context
+    window.
+    """
+    intent = classify_question(question)
+    retrieved_context = format_retrieved_context(question)
+    rejected_context = format_rejected_context(question)
+    history_context = format_history_context(history)
+
+    base_parts = [intent_instruction(intent)]
+    if retrieved_context:
+        base_parts.append(retrieved_context)
+    if rejected_context:
+        base_parts.append(rejected_context)
+    base_parts.append(f"Question: {question}")
+    base_text = get_schema_prompt(db_path=db_path) + "\n\n" + "\n\n".join(base_parts)
+
+    base_tokens = estimate_tokens(base_text)
+    history_tokens = estimate_tokens(history_context) if history_context else 0
+    return base_tokens, history_tokens, base_tokens + history_tokens
+
+
 def estimate_context_size(
     question: str,
     history: list[tuple[str, str]] | None = None,
     db_path: str | None = None,
 ) -> int:
-    """Estimate the prompt token count for a question, for display only."""
-    intent = classify_question(question)
-    retrieved_context = format_retrieved_context(question)
-    rejected_context = format_rejected_context(question)
-    history_context = format_history_context(history)
-    prompt_parts = [intent_instruction(intent)]
-    if history_context:
-        prompt_parts.append(history_context)
-    if retrieved_context:
-        prompt_parts.append(retrieved_context)
-    if rejected_context:
-        prompt_parts.append(rejected_context)
-    prompt_parts.append(f"Question: {question}")
-    full_text = get_schema_prompt(db_path=db_path) + "\n\n" + "\n\n".join(prompt_parts)
-    return estimate_tokens(full_text)
+    """Estimate the total prompt token count for a question, for display only."""
+    _, _, total = estimate_context_breakdown(question, history=history, db_path=db_path)
+    return total
 
 
 def generate_sql(
