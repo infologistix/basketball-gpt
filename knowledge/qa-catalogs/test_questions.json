@@ -1,0 +1,181 @@
+[
+  {
+    "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welche Mannschaft hat die meisten Rebounds (offensiv und defensiv) in der BBL in der Saison 2025/2026?",
+    "sql": "SELECT player_team AS team, SUM(orb + drb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "['offensive rebounds', 'defensive rebounds', 'total'. 'season', 'bbl']"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hatte in der BBL-Saison 2025–2026 die meisten Rebounds?",
+    "sql": "SELECT player_name, SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Zeig mir als Balkendiagramm die zehn EuroLeague-Spieler mit den meisten Punkten in der Saison 2025–2026.",
+    "sql": "SELECT player_name, SUM(pts) AS total_points\nFROM bronze.b_el_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_name\nORDER BY total_points DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welches EuroLeague-Team hatte das beste Net-Rating in der Saison 2025–2026?",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    pts_per_poss_gegner,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2025-2026'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS pts_eigenes,\n    SUM(pts_per_poss_gegner * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS pts_gegner\n  FROM normalized\n  GROUP BY team\n)\nSELECT\n  team,\n  pts_eigenes - pts_gegner AS net_rating\nFROM merged\nORDER BY net_rating DESC\nLIMIT 1",
+    "tables": [
+      "gold.g_el_teams"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welches Team hat in der Bundesliga die größte Differenz zwischen erfolgreichen 2-Punkte Würfen und erfolgreichen 3-Punkte Würfen. \nÜber alle Saisons",
+    "sql": "SELECT btrim(player_team) AS team,\n       SUM(two_p) AS total_two_p,\n       SUM(three_p) AS total_three_p,\n       SUM(two_p) - SUM(three_p) AS diff\nFROM bronze.b_bbl_boxscore\nWHERE competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY diff DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "el",
+      "turnovers"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Zeig mir die 5 Teams mit dem besten Offensivrating in der EuroLeague-Saison 2023/24.",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos AKTOR Athens'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
+    "tables": [
+      "gold.g_el_teams"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welcher Spieler hatte den höchsten Punktewert in einem einzelnen Spiel in der letzten EuroCup-Saison?",
+    "sql": "SELECT player_name, player_team, pts, date\nFROM bronze.b_ec_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nORDER BY pts DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "eurocup"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wie viele Turnover hatte der Spieler Andreas Obst  in der Saison 2025-2026 in der BBL?",
+    "sql": "SELECT   SUM(tov) AS total_turnovers FROM bronze.b_bbl_boxscore WHERE player_name ILIKE '%Obst%'   AND date_final >= '2025-07-15' AND date_final < '2026-07-15'   AND competition = 'easyCredit BBL'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "turnover",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Aus welchen Ländern kamen die meisten Punkte in der Champions-League-Saison 2025–2026?",
+    "sql": "WITH info AS (\n  SELECT DISTINCT ON (btrim(player_name))\n         btrim(player_name) AS player_name, nationality\n  FROM bronze.b_cl_player_info\n),\nsaison AS (\n  SELECT btrim(player_name) AS player_name, SUM(pts) AS punkte\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n  GROUP BY 1\n)\nSELECT i.nationality, COUNT(*) AS spieler, SUM(s.punkte) AS punkte\nFROM saison s\nJOIN info i USING (player_name)\nGROUP BY 1\nORDER BY punkte DESC",
+    "tables": [
+      "bronze.b_cl_boxscore",
+      "bronze.b_cl_player_info"
+    ],
+    "tags": [
+      "nationality",
+      "country",
+      "land",
+      "länder",
+      "player_info",
+      "join",
+      "distinct on",
+      "duplicate",
+      "champions league",
+      "points",
+      "punkte",
+      "season"
+    ],
+    "doc": "Joining a boxscore to a *_player_info table needs DISTINCT ON. player_info holds ONE ROW PER CRAWLED SEASON per player - 206 of 1165 Champions League players have 2-4 rows - so a plain JOIN fans out and multiplies their points by that row count. Verified against live data: without DISTINCT ON, USA came out at 17752 points instead of 9813, and the inflation is NOT uniform, so the ranking itself changes (Turkey rose from 6th to 3rd, Germany fell from 5th to 7th). Also note: player_info has NO season column, so the season must be filtered on the boxscore side and only then joined for the attribute - filtering player_info alone silently mixes every crawled season. Use btrim() on both sides of the name join; without it players with stray whitespace drop out entirely. Champions League has three profile tables (b_cl_player_info, _alt, _test) - b_cl_player_info is the canonical one."
+  },
+  {
+    "question": "Welches Champions-League-Team hatte in der Saison 2025-2026 die beste Freiwurfquote (mindestens 100 Versuche)?",
+    "sql": "SELECT player_team AS team, SUM(ft) AS made, SUM(fta) AS attempted,\n       ROUND(SUM(ft) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_cl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_team\nHAVING SUM(fta) >= 100\nORDER BY ft_pct DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_cl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "champions league",
+      "free throws"
+    ],
+    "doc": "Test entry for the JSON upload feature. Verified against live data: La Laguna Tenerife leads at 82.5% (279/338). Note b_cl_boxscore uses 'ft', not 'ftm', for free throws made."
+  },
+  {
+    "question": "Welche Mannschaft hat die meisten Defensive Rebounds in der BBL in der Saison 2025/2026?",
+    "sql": "SELECT\n    player_team AS team,\n    SUM(drb) AS total_drb\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15'\n  AND date_final < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_drb DESC\nLIMIT 1;",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "defensive rebounds",
+      "season",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welcher Spieler hatte die beste Wurfquote in der BBL Saison 2025-2026?",
+    "sql": "SELECT   player_name,  SUM(fgm) AS fgm,  SUM(fga) AS fga,  ROUND(SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0), 2) AS fg_pct FROM bronze.b_bbl_boxscore  WHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' \nand competition = 'easyCredit BBL' GROUP BY player_name HAVING SUM(fga) >= 50 ORDER BY fg_pct DESC  LIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "points",
+      "attempts",
+      "rate",
+      "bbl"
+    ],
+    "doc": "nan"
+  }
+]

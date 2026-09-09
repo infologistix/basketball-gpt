@@ -1,0 +1,336 @@
+[
+  {
+    "question": "draw me chart of 10 top scorers in EC from season 2025-2026",
+    "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_ec_boxscore\nWHERE pts IS NOT NULL\nGROUP BY player_name\nHAVING SUM(pts) > 0\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "draw",
+      "points",
+      "eurocup"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-25T17:46:02.599502+00:00",
+    "reason": "Marked as bad by user."
+  },
+  {
+    "question": "give me the most three point in EL in season 2025-2026",
+    "sql": "SELECT player_name, SUM(three_p) AS total_three_p\nFROM bronze.b_el_boxscore\nGROUP BY player_name\nHAVING SUM(three_p) > 0\nORDER BY total_three_p DESC\nLIMIT 25",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-25T17:54:01.892020+00:00",
+    "reason": "Marked as bad by user."
+  },
+  {
+    "question": "who is the top scorer of BBL last season ?",
+    "sql": "SELECT player_name, pts, gp, player_team\nFROM gold.g_player_profile_bbl\nWHERE saison = '2024-2025' AND gp >= 20\nORDER BY pts DESC\nLIMIT 1",
+    "tables": [
+      "gold.g_player_profile_bbl"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-27T08:34:10.782353+00:00",
+    "reason": "Marked as bad by user."
+  },
+  {
+    "question": "Wer war in der BBL-Saison 2025–2026 der beste Rebounder jedes Teams, gemessen an Rebounds pro Spiel (mindestens 15 Spiele)?",
+    "sql": "WITH player_stats AS (\n  SELECT player_team, player_name, trb, gp, trb::numeric / gp AS reb_per_game\n  FROM gold.g_player_profile_bbl\n  WHERE saison = '2025-2026' AND gp >= 15\n),\nranked AS (\n  SELECT player_team, player_name, trb, gp, reb_per_game,\n         ROW_NUMBER() OVER (PARTITION BY player_team ORDER BY reb_per_game DESC) as rn\n  FROM player_stats\n)\nSELECT player_team, player_name, gp, trb, ROUND(reb_per_game, 2) AS reb_per_game\nFROM ranked\nWHERE rn = 1\nORDER BY player_team",
+    "tables": [
+      "gold.g_player_profile_bbl"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T14:37:35.067531+00:00",
+    "reason": "Marked as bad by user."
+  },
+  {
+    "question": "Aus welchen Ländern kamen die meisten Punkte in der Champions-League-Saison 2025–2026?",
+    "sql": "SELECT\n  pi.nationality,\n  SUM(bc.pts) AS total_points\nFROM bronze.b_cl_boxscore bc\nJOIN bronze.b_cl_player_info pi ON bc.player_name ILIKE pi.player_name\nWHERE bc.date >= '2025-07-15' AND bc.date < '2026-07-15'\nGROUP BY pi.nationality\nORDER BY total_points DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_cl_boxscore",
+      "bronze.b_cl_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "champions_league"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T16:04:31.556448+00:00",
+    "reason": "Es war kein Reason hinterlegt, nur \"Marked as bad by user.\" - jetzt ergaenzt: bronze.b_cl_player_info hat MEHRERE Zeilen pro Spieler (bis zu 4, ein Profil pro gecrawlter Saison, z.B. Cameron Hunt: 4 Zeilen). Der JOIN ohne DISTINCT ON (player_name) dupliziert daher jede Boxscore-Zeile eines Spielers einmal pro passender player_info-Zeile und blaeht SUM(bc.pts) auf. Verifiziert (CL-Saison 2025-2026): mit dem ungefilterten JOIN kommt USA auf 17752 Punkte, nach Dedup mit DISTINCT ON (player_name) auf player_info nur 11785 - eine Aufblaehung um ~50%, die auch die Rangfolge veraendert (Tuerkei faellt aus den Top 5, Deutschland kommt neu hinein). Vor jedem JOIN auf b_*_player_info zuerst per DISTINCT ON (player_name) auf eine Zeile pro Spieler reduzieren."
+  },
+  {
+    "question": "welche Spielern kommen aus Deutschland in Bundesliga",
+    "sql": "SELECT DISTINCT player_name, nationality, player_team FROM bronze.b_bbl_player_info WHERE nationality IS NOT NULL AND nationality ILIKE '%Germany%' ORDER BY player_name LIMIT 50",
+    "tables": [
+      "bronze.b_bbl_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "euroleague",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T16:41:22.848122+00:00",
+    "reason": "Marked as bad by user."
+  },
+  {
+    "question": "Welches Team stand in der BBL-Saison 2025–2026 auf Platz 1?",
+    "sql": "SELECT team FROM gold.g_bbl_teams WHERE saison = '2025-2026' ORDER BY of_per_eigenes DESC LIMIT 1",
+    "tables": [
+      "gold.g_bbl_teams"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T18:34:42.980850+00:00",
+    "reason": "Falsche Spalte und falsches Konzept. of_per_eigenes ist die Offensiv-Rebound-Quote (Beweis: of_per_eigenes + def_per_gegner = 1.000 fuer jedes Team), nicht Angriffsstaerke und erst recht kein Tabellenplatz. Bonn steht bei 25-19 auf Rang 4; Platz 1 ist Bayern Muenchen mit 39-9. \"Platz 1\" heisst Siegbilanz: pro Spiel und Team die Punkte aggregieren, per Self-Join den Gegner desselben Spiels danebenstellen, Siege als eigen > gegner zaehlen, ProA-Pokalgegner mit HAVING count > 2 ausschliessen. gold.g_bbl_teams enthaelt ueberhaupt keine Sieg- oder Platzierungsspalte."
+  },
+  {
+    "question": "Wie viele Point Guards spielten in der BBL-Saison 2025–2026?",
+    "sql": "SELECT COUNT(DISTINCT bs.player_name) AS point_guards\nFROM bronze.b_bbl_boxscore bs\nJOIN bronze.b_bbl_player_info pi\n  ON UPPER(regexp_replace(bs.player_name, '\\s*\\(.*\\)\\s*$', '')) = pi.player_name_short\nWHERE bs.date_final >= '2025-07-15' AND bs.date_final < '2026-07-15'\n  AND (pi.position ILIKE '%point guard%' OR pi.position ILIKE '%PG%')",
+    "tables": [
+      "bronze.b_bbl_boxscore",
+      "bronze.b_bbl_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T20:25:51.498923+00:00",
+    "reason": "player_info.position enthaelt widerspruechliche/veraltete Eintraege pro Spieler (dokumentiert). Mind. 6 als PG gezaehlte Spieler sind laut ihrem eigenen Boxscore-Suffix dieser Saison SG oder PF (z.B. Carter C. steht im Boxscore als (PF)). Der Boxscore-Suffix ist vollstaendig (8212/8212 Zeilen) und saisonaktuell - fuer eine saisonbezogene Positionsfrage die zuverlaessigere Quelle, ganz ohne Join. Direkt gezaehlt: 86 statt 91. Zusaetzlich verliert der INNER JOIN 17 von 393 Spielern komplett, darunter mind. einen expliziten PG (Mueller J.)."
+  },
+  {
+    "question": "Zeig mir die 5 Teams mit dem besten Offensivrating in der EuroLeague-Saison 2023/24.",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
+    "tables": [
+      "gold.g_el_teams"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T20:34:37.551949+00:00",
+    "reason": "Team-Umbenennungs-CASE wurde unveraendert aus der 2025/26-Abfrage kopiert. Fuer 2025/26 gab es keinen Panathinaikos-Split (nur \"Panathinaikos AKTOR Athens\"), die Regel war dort wirkungslos. In 2023/24 existiert der Split wirklich (\"Panathinaikos AKTOR Athens\" vs \"Panathinaikos Athens\"), aber die CASE-Zielzeichenkette 'Panathinaikos Aktor Athens' schreibt AKTOR klein, waehrend die unveraenderte Original-Zeile GROSS bleibt - GROUP BY ist case-sensitiv, der Merge schlaegt fehl. Ergebnis: Platz 5 der App (Panathinaikos AKTOR Athens, 1.181) ist nur ein halber Datensatz (70,1 von 142,7 Ballbesitzen). Richtig gemergt: 1.154, faellt aus Top 5 raus. Echter Platz 5 ist Partizan Mozzart Bet Belgrade (1.180), fehlt komplett. Umbenennungen muessen case-insensitiv normalisiert werden (z.B. UPPER() auf beiden Seiten, nicht nur beim Vergleich) und pro Saison verifiziert werden, nicht blind aus einer anderen Saison kopiert."
+  },
+  {
+    "question": "Welcher BBL-Spieler hatte in der Saison 2025–2026 das beste Offensiv-Rating außerhalb des Feldes?",
+    "sql": "SELECT\n  player,\n  team,\n  offensive_rating\nFROM gold.g_bbl_players\nWHERE saison = '2025-2026'\nORDER BY offensive_rating DESC\nLIMIT 1",
+    "tables": [
+      "gold.g_bbl_players"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T21:03:12.306934+00:00",
+    "reason": "\"Außerhalb des Feldes\" wurde ignoriert - die Query nimmt offensive_rating statt der eigentlich gemeinten net_rating_off_court. Das ist keine Verwechslung zwischen aehnlichen Spalten, sondern das Ignorieren eines Teils der Frage. net_rating_off_court ist eine On/Off-Kennzahl: Netto- Rating des TEAMS waehrend dieser Spieler NICHT auf dem Feld steht (Beweis: Werte clustern nach Team, nicht nach individueller Spielerqualitaet - alle Bayern-Spieler positiv, alle Braunschweig-Spieler negativ). offensive_ rating ist eine individuelle Offensiv-Kennzahl ohne jeden Bezug zu \"auf/ ausserhalb des Feldes\". Richtige Antwort waere Isaiah Mike (22.360), nicht Andrew Harrison (133.071) - komplett unterschiedliche Spieler UND Groessenordnung, ein Hinweis, dass sofort haette auffallen muessen."
+  },
+  {
+    "question": "Zeig mir als Liniendiagramm, wie sich die Punkte pro Spiel von Andreas Obst über die BBL-Saison 2025–2026 entwickelt haben.",
+    "sql": "SELECT date_final, SUM(pts) AS pts_per_game\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE '%Andreas Obst%'\n  AND date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY date_final\nORDER BY date_final",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T21:37:22.991024+00:00",
+    "reason": "\"Andreas Obst\" matcht nie player_name in bronze.b_bbl_boxscore, weil dort \"Obst A. (SG)\" steht - Nachname zuerst, abgekuerzter Vorname, Positions- Suffix in Klammern, kein Leerzeichen-getrennter Vollname. ILIKE '%Andreas Obst%' gibt deshalb garantiert 0 Zeilen, nicht \"keine Daten vorhanden\" - der Spieler hat 30 Spiele in der Saison 2025-2026. Um einen vollstaendig getippten Namen gegen b_bbl_boxscore zu matchen, zuerst Vor- und Nachname trennen und gegen \"Nachname V.\" suchen (z.B. WHERE player_name ILIKE 'Obst A%'), oder ueber b_bbl_player_info aufloesen (UPPER(player_name) dort ist Vollname ohne Kommas) und per player_name_short-Bridge zu boxscore verbinden, wie in der bereits dokumentierten BBL-Namens-Join-Regel beschrieben."
+  },
+  {
+    "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_name\nORDER BY ft_pct DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T21:44:53.663821+00:00",
+    "reason": "Fehlende Mindestschwelle (HAVING SUM(fta) >= 50 o.ae.) UND Postgres' NULLS-FIRST-Standard bei ORDER BY ... DESC wirken hier zusammen. Ohne Mindestschwelle stehen 12 Spieler mit 0 Freiwurfversuchen (0/0 = NULL- Quote) ganz oben, weil Postgres NULL bei DESC-Sortierung standardmaessig VOR echten Werten einordnet, nicht dahinter. Das Ergebnis ist nicht nur unpraezise, sondern komplett bedeutungslos - sichtbar am Balkendiagramm selbst, wo jeder Balken bei ft_made=0 steht. Richtige Abfrage braucht zwei Korrekturen: HAVING SUM(fta) >= 50 (Saisonsumme, nicht Einzelspiel) UND/ODER quote IS NOT NULL, dann ORDER BY quote DESC. Korrekte Spitze: Alleyne N. (SG) 91.0% (61/67), Roland J. (PG) 90.8% (108/119)."
+  },
+  {
+    "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-28T21:48:07.792371+00:00",
+    "reason": "Die SQL waehlt korrekt die Top-10 nach Freiwurfquote (HAVING SUM(fta) >= 50, ORDER BY ft_pct DESC) - dieser Teil ist richtig. Aber das Diagramm nutzt \"Wert\" = ft_made statt ft_pct, wodurch Balkenlaenge UND Sortierreihenfolge die gemachten Freiwuerfe zeigen, nicht die Quote, nach der gefragt wurde. Ergebnis: Alleyne N., die eigentliche Nummer 1 (91.0%), erscheint auf Platz 8 von 10 im Chart (nur 61 Treffer), waehrend Obst A. (89.1%, tatsaechlich nur Platz 8 nach Quote) ganz oben steht (139 Treffer). Fuer eine \"beste Quote\"-Frage muss \"Wert\" automatisch auf die Prozentspalte (ft_pct) zeigen, die auch im ORDER BY der SQL steht - nicht auf die erste verfuegbare numerische Spalte oder eine rohe Zaehlspalte."
+  },
+  {
+    "question": "Welche Bundesliga Mannschaft hat die meisten Rebounds in der Saison 2025-2026",
+    "sql": "SELECT btrim(player_team) AS team,\n       SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_team\nHAVING COUNT(DISTINCT link) > 2\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-08-31T09:31:36.282869+00:00",
+    "reason": "Der urspruengliche Reason war falsch: die Query nutzt NICHT nur Heimspiele - GROUP BY player_team erfasst pro Team bereits Heim- UND Auswaertsspiele (verifiziert: Alba Berlin 28 Heim- + 25 Auswaertsspiele = 53 Spiele insgesamt, alle in der Summe enthalten). Der eigentliche Fehler ist die fehlende competition-Filterung: ohne AND competition = 'easyCredit BBL' werden Pokalspiele mitgezaehlt. Verifiziert (Saison 2025-2026): Alba Berlin kommt ungefiltert auf 1839 Rebounds, korrekt gefiltert nur 1679 - Rang 1 bleibt zwar derselbe, aber die Zahl ist falsch."
+  },
+  {
+    "question": "Welcher Spieler hatte die höchste Wurfeffizienz in BBL letzte Saison?",
+    "sql": "SELECT player_name, ef\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nORDER BY ef DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "bbl",
+      "efficiency",
+      "shooting"
+    ],
+    "doc": "Saved from session review as a rejected SQL example.",
+    "source": "session_review",
+    "created_at": "2026-09-02T09:46:21.894501+00:00",
+    "reason": "Falsche Spalte gewaehlt: 'Wurfeffizienz' wurde auf die Spalte ef gemappt - das ist der Basketball-Box-Score-Effizienzwert (PTS+REB+AST+STL+BLK minus verpasste Wuerfe minus TOV, ein Zaehlwert ueber die GESAMTE Leistung), keine Wurfquote. Fuer Wurfeffizienz/eFG% die Spalten fgm/fga (oder two_p/two_pa + three_p/three_pa) verwenden: ROUND((SUM(fgm) + 0.5*SUM(three_p)) * 100.0 / NULLIF(SUM(fga), 0), 2). Zusaetzlich zwei weitere Fehler in diesem Beispiel: (1) Ergebnis kam aus ORDER BY ef DESC LIMIT 1 auf Einzelspiel-Zeilen statt Saison-Aggregation - IMMER erst mit GROUP BY player_name SUM(...) aggregieren; (2) kein Mindest-Wurfversuche-Filter (HAVING SUM(fga) >= 100 o.ae.) - ohne Schwelle gewinnen Spieler mit 1-2 Versuchen und zufaelligem 100%. Verifiziert korrekte Antwort (Saison 2025-2026, min. 100 Versuche): Onu E. (C), 201 Versuche, eFG% 69.90%."
+  },
+  {
+    "question": "In welchen Teams hat oscar da silva bisher gespielt",
+    "sql": "SELECT DISTINCT player_name, player_team\nFROM bronze.b_bbl_player_info\nWHERE player_name ILIKE '%oscar da silva%'\nORDER BY player_team\nLIMIT 100",
+    "tables": [
+      "bronze.b_bbl_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-09-03T13:15:01.672210+00:00",
+    "reason": "schau bitte in der  bronze.b_bbl_player_info nach"
+  },
+  {
+    "question": "In welchen Teams hat OSCAR DA SILVA bisher gespielt",
+    "sql": "SELECT DISTINCT player_name, player_team\nFROM bronze.b_bbl_player_info\nWHERE player_name ILIKE '%OSCAR DA SILVA%'\nORDER BY player_team\nLIMIT 100",
+    "tables": [
+      "bronze.b_bbl_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-09-03T13:23:38.138202+00:00",
+    "reason": "SELECT distinct      player_name,     former_clubs"
+  },
+  {
+    "question": "Aus welchen Ländern kamen die meisten Punkte in der letzten Euroleague Saison?",
+    "sql": "WITH season_players AS (\n  SELECT DISTINCT UPPER(regexp_replace(player_name, ', ', ' ')) AS norm_name\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n),\nplayer_nat AS (\n  SELECT\n    UPPER(regexp_replace(player_name, ', ', ' ')) AS norm_name,\n    MAX(nationality) AS nationality\n  FROM bronze.b_el_player_info\n  GROUP BY UPPER(regexp_replace(player_name, ', ', ' '))\n)\nSELECT\n  pn.nationality,\n  SUM(b.pts) AS total_pts\nFROM bronze.b_el_boxscore b\nJOIN season_players sp\n  ON UPPER(regexp_replace(b.player_name, ', ', ' ')) = sp.norm_name\nJOIN player_nat pn\n  ON sp.norm_name = pn.norm_name\nWHERE b.date >= '2025-07-15' AND b.date < '2026-07-15'\nGROUP BY pn.nationality\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_el_boxscore",
+      "bronze.b_el_player_info"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-09-04T09:19:29.236179+00:00",
+    "reason": "in b_el_player_info sind die Namen als \"VORNAME NACHNAME\" formatiert und in b_el_boxscore as \"NACHNAME, VORNAME\""
+  },
+  {
+    "question": "Welcher Spieler ist der beste Rebounder in der Championsleague in 2024-2025",
+    "sql": "SELECT\n  player_name,\n  SUM(orb + drb) AS total_rebounds,\n  COUNT(DISTINCT link) AS games_played,\n  ROUND(SUM(orb + drb) * 1.0 / COUNT(DISTINCT link), 2) AS reb_per_game\nFROM bronze.b_cl_boxscore\nWHERE date >= '2024-07-15' AND date < '2025-07-15'\nGROUP BY player_name\nHAVING COUNT(DISTINCT link) >= 20\nORDER BY reb_per_game DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_cl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "champions_league"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-09-04T10:07:12.542380+00:00",
+    "reason": "Die Begrenzung auf COUNT(DISTINCT link) >= 20 ist zu streng"
+  },
+  {
+    "question": "Gib mir eine Liste der 5 griechischen Spieler, die in der letzten Saison der Championsleague die meisten Drei-Punkte Würfe getroffen haben",
+    "sql": "WITH info AS (\n  SELECT DISTINCT ON (btrim(player_name))\n         btrim(player_name) AS player_name, nationality\n  FROM bronze.b_cl_player_info\n  WHERE nationality ILIKE '%GRC%'\n),\nstats AS (\n  SELECT btrim(player_name) AS player_name, SUM(three_p) AS three_p_made\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n  GROUP BY 1\n)\nSELECT i.player_name, s.three_p_made\nFROM stats s\nJOIN info i ON s.player_name = i.player_name\nORDER BY s.three_p_made DESC\nLIMIT 5",
+    "tables": [
+      "bronze.b_cl_player_info",
+      "bronze.b_cl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "bad",
+      "points",
+      "champions_league"
+    ],
+    "doc": "Saved from user feedback as a rejected SQL example.",
+    "source": "streamlit_feedback",
+    "created_at": "2026-09-04T10:21:10.894351+00:00",
+    "reason": "Das Kürzel für Griechenland in b_cl_player_info ist GRE"
+  }
+]
