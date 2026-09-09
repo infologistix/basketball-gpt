@@ -69,6 +69,24 @@ CHART_TEXT = "#EFEAE3"
 CHART_MUTED = "#A69F95"
 CHART_GRID = "#2B261F"
 
+# Hand-picked, not a Vega scheme: a sequential scheme like "oranges" reads as
+# near-identical shades once there are more than 2-3 slices, which defeats the
+# point of a pie/donut chart (color IS the encoding here, unlike a bar chart
+# where position also carries the ranking). These 8 are chosen to stay
+# distinguishable from each other and to hold up against the #1A1611 card
+# background, while still sitting in the same warm, muted register as the
+# rest of the palette instead of a jarring default rainbow.
+PIE_CHART_COLORS = [
+    CHART_ACCENT,  # orange
+    "#4F8FBF",  # blue
+    "#5FA773",  # green
+    "#C9A227",  # gold
+    "#B0567D",  # rose
+    "#6FBF9E",  # teal
+    "#9673B0",  # purple
+    "#C9754B",  # rust
+]
+
 
 def style_chart(chart: alt.Chart) -> alt.Chart:
     """Apply the app's palette and typography to a chart.
@@ -114,6 +132,7 @@ def style_chart(chart: alt.Chart) -> alt.Chart:
 # matches on - renaming those would mean touching the matching logic too.
 CHART_TAB_LABELS = {
     "Bar": "Balken",
+    "Pie": "Kreisdiagramm",
     "Line": "Linie",
     "Scatter": "Streuung",
     "Histogram": "Histogramm",
@@ -799,6 +818,8 @@ def render_result_chart(
             with tab:
                 if chart_name == "Bar":
                     render_bar_chart(df, numeric_columns, generated_sql)
+                elif chart_name == "Pie":
+                    render_pie_chart(df, numeric_columns, generated_sql)
                 elif chart_name == "Line":
                     render_line_chart(df, numeric_columns, generated_sql)
                 elif chart_name == "Scatter":
@@ -925,6 +946,7 @@ def available_chart_options(df: pd.DataFrame) -> list[str]:
     options = []
     if categorical_columns and numeric_columns:
         options.append("Bar")
+        options.append("Pie")
     if date_columns and numeric_columns:
         options.append("Line")
     if len(numeric_columns) >= 2:
@@ -953,6 +975,8 @@ def requested_chart_name(question: str | None) -> str | None:
         return "Line"
     if "histogram" in lowered:
         return "Histogram"
+    if "pie" in lowered or "kreisdiagramm" in lowered or "tortendiagramm" in lowered or "kuchendiagramm" in lowered:
+        return "Pie"
     if "bar" in lowered or "balken" in lowered:
         return "Bar"
     return None
@@ -997,6 +1021,52 @@ def render_bar_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql
         )
         .properties(title=title)
         .properties(height=max(320, min(700, 28 * len(chart_df))))
+    )
+    st.altair_chart(style_chart(chart), use_container_width=True)
+
+
+def render_pie_chart(df: pd.DataFrame, numeric_columns: list[str], generated_sql: str | None) -> None:
+    """Render a pie chart for categorical/numeric result data.
+
+    Capped at the top 8 categories by value - unlike a bar chart's 25-row
+    cap, a pie chart's slices become unreadable well before that many.
+    Negative or zero values are dropped rather than shown as an inverted or
+    empty slice, which a pie's theta encoding can't represent meaningfully.
+    """
+    label_columns = [column for column in df.columns if column not in numeric_columns]
+    label_column = st.selectbox("Beschriftung", label_columns or list(df.columns), key=f"pie_label_{id(df)}")
+    value_column = st.selectbox(
+        "Wert", numeric_columns, index=default_value_index(numeric_columns, generated_sql), key=f"pie_value_{id(df)}"
+    )
+    chart_df = df[[label_column, value_column]].dropna()
+    chart_df = chart_df[chart_df[value_column] > 0]
+    chart_df = chart_df.sort_values(value_column, ascending=False).head(8)
+    if chart_df.empty:
+        st.caption("Keine Zeilen für ein Kreisdiagramm.")
+        return
+
+    title = f"{humanize_column(value_column)} nach {humanize_column(label_column)}"
+    # Domain fixed to the chart's own descending order (not left to Vega's
+    # alphabetical default) so the biggest slice always gets the same first
+    # palette color, consistently, chart to chart.
+    category_domain = chart_df[label_column].tolist()
+    chart = (
+        alt.Chart(chart_df)
+        .mark_arc(innerRadius=60, stroke="#1A1611", strokeWidth=2)
+        .encode(
+            theta=alt.Theta(f"{value_column}:Q", stack=True),
+            color=alt.Color(
+                f"{label_column}:N",
+                scale=alt.Scale(domain=category_domain, range=PIE_CHART_COLORS[: len(category_domain)]),
+                legend=alt.Legend(title=humanize_column(label_column), labelLimit=200),
+            ),
+            order=alt.Order(f"{value_column}:Q", sort="descending"),
+            tooltip=[
+                alt.Tooltip(f"{label_column}:N", title=humanize_column(label_column)),
+                alt.Tooltip(f"{value_column}:Q", title=humanize_column(value_column)),
+            ],
+        )
+        .properties(title=title, width=380, height=380)
     )
     st.altair_chart(style_chart(chart), use_container_width=True)
 
