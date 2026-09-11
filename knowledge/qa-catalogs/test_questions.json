@@ -1,7 +1,7 @@
 [
   {
     "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
-    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -14,7 +14,7 @@
   },
   {
     "question": "Welche Mannschaft hat die meisten Rebounds (offensiv und defensiv) in der BBL in der Saison 2025/2026?",
-    "sql": "SELECT player_team AS team, SUM(orb + drb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "sql": "SELECT player_team AS team, SUM(orb + drb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_rebounds DESC\nLIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -25,7 +25,7 @@
   },
   {
     "question": "Wer hatte in der BBL-Saison 2025–2026 die meisten Rebounds?",
-    "sql": "SELECT player_name, SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "sql": "SELECT player_name, SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY total_rebounds DESC\nLIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -52,7 +52,7 @@
   },
   {
     "question": "Welches EuroLeague-Team hatte das beste Net-Rating in der Saison 2025–2026?",
-    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    pts_per_poss_gegner,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2025-2026'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS pts_eigenes,\n    SUM(pts_per_poss_gegner * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS pts_gegner\n  FROM normalized\n  GROUP BY team\n)\nSELECT\n  team,\n  pts_eigenes - pts_gegner AS net_rating\nFROM merged\nORDER BY net_rating DESC\nLIMIT 1",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    ppp,\n    ppp_opp,\n    poss\n  FROM gold.g_el_teams\n  WHERE season = '2025-2026'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(ppp * poss) / SUM(poss) AS pts_eigenes,\n    SUM(ppp_opp * poss) / SUM(poss) AS pts_gegner\n  FROM normalized\n  GROUP BY team\n)\nSELECT\n  team,\n  pts_eigenes - pts_gegner AS net_rating\nFROM merged\nORDER BY net_rating DESC\nLIMIT 1",
     "tables": [
       "gold.g_el_teams"
     ],
@@ -77,7 +77,7 @@
   },
   {
     "question": "Zeig mir die 5 Teams mit dem besten Offensivrating in der EuroLeague-Saison 2023/24.",
-    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos AKTOR Athens'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos AKTOR Athens'\n      ELSE team\n    END AS team,\n    ppp,\n    poss\n  FROM gold.g_el_teams\n  WHERE season = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(ppp * poss) / SUM(poss) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
     "tables": [
       "gold.g_el_teams"
     ],
@@ -104,7 +104,7 @@
   },
   {
     "question": "Wie viele Turnover hatte der Spieler Andreas Obst  in der Saison 2025-2026 in der BBL?",
-    "sql": "SELECT   SUM(tov) AS total_turnovers FROM bronze.b_bbl_boxscore WHERE player_name ILIKE '%Obst%'   AND date_final >= '2025-07-15' AND date_final < '2026-07-15'   AND competition = 'easyCredit BBL'",
+    "sql": "SELECT   SUM(tov) AS total_turnovers FROM bronze.b_bbl_boxscore WHERE player_name ILIKE '%Obst%'   AND date >= '2025-07-15' AND date < '2026-07-15'   AND competition = 'easyCredit BBL'",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -153,7 +153,7 @@
   },
   {
     "question": "Welche Mannschaft hat die meisten Defensive Rebounds in der BBL in der Saison 2025/2026?",
-    "sql": "SELECT\n    player_team AS team,\n    SUM(drb) AS total_drb\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15'\n  AND date_final < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_drb DESC\nLIMIT 1;",
+    "sql": "SELECT\n    player_team AS team,\n    SUM(drb) AS total_drb\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15'\n  AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_drb DESC\nLIMIT 1;",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -166,7 +166,7 @@
   },
   {
     "question": "Welcher Spieler hatte die beste Wurfquote in der BBL Saison 2025-2026?",
-    "sql": "SELECT   player_name,  SUM(fgm) AS fgm,  SUM(fga) AS fga,  ROUND(SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0), 2) AS fg_pct FROM bronze.b_bbl_boxscore  WHERE date_final >= '2025-07-15' AND date_final < '2026-07-15' \nand competition = 'easyCredit BBL' GROUP BY player_name HAVING SUM(fga) >= 50 ORDER BY fg_pct DESC  LIMIT 1",
+    "sql": "SELECT   player_name,  SUM(fgm) AS fgm,  SUM(fga) AS fga,  ROUND(SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0), 2) AS fg_pct FROM bronze.b_bbl_boxscore  WHERE date >= '2025-07-15' AND date < '2026-07-15' \nand competition = 'easyCredit BBL' GROUP BY player_name HAVING SUM(fga) >= 50 ORDER BY fg_pct DESC  LIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],

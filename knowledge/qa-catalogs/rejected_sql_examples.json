@@ -36,7 +36,7 @@
   },
   {
     "question": "who is the top scorer of BBL last season ?",
-    "sql": "SELECT player_name, pts, gp, player_team\nFROM gold.g_player_profile_bbl\nWHERE saison = '2024-2025' AND gp >= 20\nORDER BY pts DESC\nLIMIT 1",
+    "sql": "SELECT player_name, pts, gp, player_team\nFROM gold.g_player_profile_bbl\nWHERE season = '2024-2025' AND gp >= 20\nORDER BY pts DESC\nLIMIT 1",
     "tables": [
       "gold.g_player_profile_bbl"
     ],
@@ -53,7 +53,7 @@
   },
   {
     "question": "Wer war in der BBL-Saison 2025–2026 der beste Rebounder jedes Teams, gemessen an Rebounds pro Spiel (mindestens 15 Spiele)?",
-    "sql": "WITH player_stats AS (\n  SELECT player_team, player_name, trb, gp, trb::numeric / gp AS reb_per_game\n  FROM gold.g_player_profile_bbl\n  WHERE saison = '2025-2026' AND gp >= 15\n),\nranked AS (\n  SELECT player_team, player_name, trb, gp, reb_per_game,\n         ROW_NUMBER() OVER (PARTITION BY player_team ORDER BY reb_per_game DESC) as rn\n  FROM player_stats\n)\nSELECT player_team, player_name, gp, trb, ROUND(reb_per_game, 2) AS reb_per_game\nFROM ranked\nWHERE rn = 1\nORDER BY player_team",
+    "sql": "WITH player_stats AS (\n  SELECT player_team, player_name, trb, gp, trb::numeric / gp AS reb_per_game\n  FROM gold.g_player_profile_bbl\n  WHERE season = '2025-2026' AND gp >= 15\n),\nranked AS (\n  SELECT player_team, player_name, trb, gp, reb_per_game,\n         ROW_NUMBER() OVER (PARTITION BY player_team ORDER BY reb_per_game DESC) as rn\n  FROM player_stats\n)\nSELECT player_team, player_name, gp, trb, ROUND(reb_per_game, 2) AS reb_per_game\nFROM ranked\nWHERE rn = 1\nORDER BY player_team",
     "tables": [
       "gold.g_player_profile_bbl"
     ],
@@ -104,7 +104,7 @@
   },
   {
     "question": "Welches Team stand in der BBL-Saison 2025–2026 auf Platz 1?",
-    "sql": "SELECT team FROM gold.g_bbl_teams WHERE saison = '2025-2026' ORDER BY of_per_eigenes DESC LIMIT 1",
+    "sql": "SELECT team FROM gold.g_bbl_teams WHERE season = '2025-2026' ORDER BY orb_pct DESC LIMIT 1",
     "tables": [
       "gold.g_bbl_teams"
     ],
@@ -116,11 +116,11 @@
     "doc": "Saved from user feedback as a rejected SQL example.",
     "source": "streamlit_feedback",
     "created_at": "2026-08-28T18:34:42.980850+00:00",
-    "reason": "Falsche Spalte und falsches Konzept. of_per_eigenes ist die Offensiv-Rebound-Quote (Beweis: of_per_eigenes + def_per_gegner = 1.000 fuer jedes Team), nicht Angriffsstaerke und erst recht kein Tabellenplatz. Bonn steht bei 25-19 auf Rang 4; Platz 1 ist Bayern Muenchen mit 39-9. \"Platz 1\" heisst Siegbilanz: pro Spiel und Team die Punkte aggregieren, per Self-Join den Gegner desselben Spiels danebenstellen, Siege als eigen > gegner zaehlen, ProA-Pokalgegner mit HAVING count > 2 ausschliessen. gold.g_bbl_teams enthaelt ueberhaupt keine Sieg- oder Platzierungsspalte."
+    "reason": "Falsche Spalte und falsches Konzept. orb_pct ist die Offensiv-Rebound-Quote (Beweis: orb_pct + drb_pct = 1.000 fuer jedes Team), nicht Angriffsstaerke und erst recht kein Tabellenplatz. Bonn steht bei 25-19 auf Rang 4; Platz 1 ist Bayern Muenchen mit 39-9. \"Platz 1\" heisst Siegbilanz: pro Spiel und Team die Punkte aggregieren, per Self-Join den Gegner desselben Spiels danebenstellen, Siege als eigen > gegner zaehlen, ProA-Pokalgegner mit HAVING count > 2 ausschliessen. gold.g_bbl_teams enthaelt ueberhaupt keine Sieg- oder Platzierungsspalte."
   },
   {
     "question": "Wie viele Point Guards spielten in der BBL-Saison 2025–2026?",
-    "sql": "SELECT COUNT(DISTINCT bs.player_name) AS point_guards\nFROM bronze.b_bbl_boxscore bs\nJOIN bronze.b_bbl_player_info pi\n  ON UPPER(regexp_replace(bs.player_name, '\\s*\\(.*\\)\\s*$', '')) = pi.player_name_short\nWHERE bs.date_final >= '2025-07-15' AND bs.date_final < '2026-07-15'\n  AND (pi.position ILIKE '%point guard%' OR pi.position ILIKE '%PG%')",
+    "sql": "SELECT COUNT(DISTINCT bs.player_name) AS point_guards\nFROM bronze.b_bbl_boxscore bs\nJOIN bronze.b_bbl_player_info pi\n  ON UPPER(regexp_replace(bs.player_name, '\\s*\\(.*\\)\\s*$', '')) = pi.player_name_short\nWHERE bs.date >= '2025-07-15' AND bs.date < '2026-07-15'\n  AND (pi.position ILIKE '%point guard%' OR pi.position ILIKE '%PG%')",
     "tables": [
       "bronze.b_bbl_boxscore",
       "bronze.b_bbl_player_info"
@@ -138,7 +138,7 @@
   },
   {
     "question": "Zeig mir die 5 Teams mit dem besten Offensivrating in der EuroLeague-Saison 2023/24.",
-    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    pts_per_poss_eigenes,\n    anz_ballbstz_eigenes\n  FROM gold.g_el_teams\n  WHERE saison = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(pts_per_poss_eigenes * anz_ballbstz_eigenes) / SUM(anz_ballbstz_eigenes) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
+    "sql": "WITH normalized AS (\n  SELECT\n    CASE UPPER(team)\n      WHEN 'CRVENA ZVEZDA MERIDIAN BELGRADE' THEN 'Crvena Zvezda Meridianbet Belgrade'\n      WHEN 'PANATHINAIKOS ATHENS' THEN 'Panathinaikos Aktor Athens'\n      WHEN 'BASKONIA VITORIA-GASTEIZ' THEN 'Kosner Baskonia Vitoria-Gasteiz'\n      ELSE team\n    END AS team,\n    ppp,\n    poss\n  FROM gold.g_el_teams\n  WHERE season = '2023-2024'\n),\nmerged AS (\n  SELECT\n    team,\n    SUM(ppp * poss) / SUM(poss) AS offensive_rating\n  FROM normalized\n  GROUP BY team\n)\nSELECT team, offensive_rating\nFROM merged\nORDER BY offensive_rating DESC\nLIMIT 5",
     "tables": [
       "gold.g_el_teams"
     ],
@@ -154,7 +154,7 @@
   },
   {
     "question": "Welcher BBL-Spieler hatte in der Saison 2025–2026 das beste Offensiv-Rating außerhalb des Feldes?",
-    "sql": "SELECT\n  player,\n  team,\n  offensive_rating\nFROM gold.g_bbl_players\nWHERE saison = '2025-2026'\nORDER BY offensive_rating DESC\nLIMIT 1",
+    "sql": "SELECT\n  player,\n  team,\n  offensive_rating\nFROM gold.g_bbl_players\nWHERE season = '2025-2026'\nORDER BY offensive_rating DESC\nLIMIT 1",
     "tables": [
       "gold.g_bbl_players"
     ],
@@ -170,7 +170,7 @@
   },
   {
     "question": "Zeig mir als Liniendiagramm, wie sich die Punkte pro Spiel von Andreas Obst über die BBL-Saison 2025–2026 entwickelt haben.",
-    "sql": "SELECT date_final, SUM(pts) AS pts_per_game\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE '%Andreas Obst%'\n  AND date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY date_final\nORDER BY date_final",
+    "sql": "SELECT date, SUM(pts) AS pts_per_game\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE '%Andreas Obst%'\n  AND date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY date\nORDER BY date",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -187,7 +187,7 @@
   },
   {
     "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
-    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_name\nORDER BY ft_pct DESC\nLIMIT 10",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_name\nORDER BY ft_pct DESC\nLIMIT 10",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -203,7 +203,7 @@
   },
   {
     "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
-    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
+    "sql": "SELECT\n  player_name,\n  SUM(ftm) AS ft_made,\n  SUM(fta) AS ft_attempted,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_name\nHAVING SUM(fta) >= 50\nORDER BY ft_pct DESC\nLIMIT 10",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -219,7 +219,7 @@
   },
   {
     "question": "Welche Bundesliga Mannschaft hat die meisten Rebounds in der Saison 2025-2026",
-    "sql": "SELECT btrim(player_team) AS team,\n       SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nGROUP BY player_team\nHAVING COUNT(DISTINCT link) > 2\nORDER BY total_rebounds DESC\nLIMIT 1",
+    "sql": "SELECT btrim(player_team) AS team,\n       SUM(reb) AS total_rebounds\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_team\nHAVING COUNT(DISTINCT link) > 2\nORDER BY total_rebounds DESC\nLIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
@@ -235,7 +235,7 @@
   },
   {
     "question": "Welcher Spieler hatte die höchste Wurfeffizienz in BBL letzte Saison?",
-    "sql": "SELECT player_name, ef\nFROM bronze.b_bbl_boxscore\nWHERE date_final >= '2025-07-15' AND date_final < '2026-07-15'\nORDER BY ef DESC\nLIMIT 1",
+    "sql": "SELECT player_name, ef\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nORDER BY ef DESC\nLIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
