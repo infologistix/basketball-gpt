@@ -1,45 +1,35 @@
 [
   {
-    "question": "How many columns are in table silver.s_el_ballbesitze?",
-    "sql": "SELECT table_schema, table_name, count(*)::integer AS column_count\nFROM information_schema.columns\nWHERE table_schema = 'silver' AND table_name = 's_el_ballbesitze'\nGROUP BY table_schema, table_name",
+    "question": "Welche Mannschaft hat die meisten Offensive Rebounds in der BBL in der Saison 2025/2026?",
+    "sql": "SELECT\n    player_team AS team,\n    SUM(orb) AS total_orb\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15'\n  AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_orb DESC\nLIMIT 1;",
     "tables": [
-      "silver.s_el_ballbesitze"
+      "bronze.b_bbl_boxscore"
     ],
     "tags": [
-      "schema",
-      "columns",
-      "metadata"
+      "offensive rebounds",
+      "season",
+      "bbl"
     ],
-    "doc": "Use information_schema.columns for exact column counts. Do not list all tables when the user names one table."
+    "doc": "nan"
   },
   {
-    "question": "Show columns in table bronze.b_el_boxscore",
-    "sql": "SELECT table_schema, table_name, column_name, data_type, ordinal_position\nFROM information_schema.columns\nWHERE table_schema = 'bronze' AND table_name = 'b_el_boxscore'\nORDER BY ordinal_position",
+    "question": "Ist die Wurfquote von Andreas Obst in der BBL in den letzten 5 Spielen besser geworden?",
+    "sql": "SELECT\n  date,\n  SUM(fgm) AS fgm,\n  SUM(fga) AS fga,\n  ROUND(SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0), 1) AS fg_pct,\n  SUM(three_p) AS three_p,\n  SUM(three_pa) AS three_pa,\n  ROUND(SUM(three_p) * 100.0 / NULLIF(SUM(three_pa), 0), 1) AS three_pct,\n  SUM(ftm) AS ftm,\n  SUM(fta) AS fta,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE 'Obst A%'\n  AND date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY date\nORDER BY date DESC\nLIMIT 5",
     "tables": [
-      "bronze.b_el_boxscore"
+      "bronze.b_bbl_boxscore"
     ],
     "tags": [
-      "schema",
-      "columns",
-      "metadata"
+      "field goal",
+      "success",
+      "rate",
+      "bbl",
+      "trend",
+      "last 5"
     ],
-    "doc": "For column-list questions, return column metadata ordered by ordinal_position."
+    "doc": "nan"
   },
   {
-    "question": "Show 20 sample rows from bronze.b_el_boxscore",
-    "sql": "SELECT *\nFROM bronze.b_el_boxscore\nLIMIT 20",
-    "tables": [
-      "bronze.b_el_boxscore"
-    ],
-    "tags": [
-      "sample",
-      "rows",
-      "preview"
-    ],
-    "doc": "For sample rows, return raw rows with a small LIMIT. Do not aggregate."
-  },
-  {
-    "question": "Draw a bar chart of total pts by player_name from bronze.b_el_boxscore, top 20, sort descending",
+    "question": "Zeig mir als Balkendiagramm die 20 EuroLeague-Spieler mit den meisten Punkten, absteigend sortiert.",
     "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_el_boxscore\nWHERE pts IS NOT NULL\nGROUP BY player_name\nHAVING SUM(pts) > 0\nORDER BY total_pts DESC\nLIMIT 20",
     "tables": [
       "bronze.b_el_boxscore"
@@ -55,145 +45,21 @@
     "doc": "For top scoring charts, group by player_name, sum pts, remove zero totals, order by total_pts, and limit results."
   },
   {
-    "question": "Draw a bar chart of top EuroCup players by total points",
-    "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_ec_boxscore\nWHERE pts IS NOT NULL\nGROUP BY player_name\nHAVING SUM(pts) > 0\nORDER BY total_pts DESC\nLIMIT 20",
+    "question": "Wie war der Spielstand nach jedem Viertel im Spiel FC Bayern München gegen Alba Berlin am 10.6.2024?",
+    "sql": "WITH q_scores AS (\n  SELECT quarter, player_team, SUM(pts) AS pts_in_q\n  FROM bronze.b_bbl_playbyplay\n  WHERE date = '2024-06-10'\n  GROUP BY quarter, player_team\n),\ncum_scores AS (\n  SELECT quarter, player_team, SUM(pts_in_q) OVER (PARTITION BY player_team ORDER BY quarter) AS cum_pts\n  FROM q_scores\n)\nSELECT quarter,\n       MAX(CASE WHEN player_team ILIKE '%BAYERN%' THEN cum_pts END) AS bayern,\n       MAX(CASE WHEN player_team ILIKE '%ALBA%' THEN cum_pts END) AS alba\nFROM cum_scores\nGROUP BY quarter\nORDER BY quarter",
     "tables": [
-      "bronze.b_ec_boxscore"
+      "bronze.b_bbl_playbyplay"
     ],
     "tags": [
-      "draw",
-      "chart",
-      "bar",
-      "eurocup",
-      "points",
-      "player"
-    ],
-    "doc": "EuroCup bronze tables use the b_ec prefix."
-  },
-  {
-    "question": "Draw a scatter plot of pts vs minutes from bronze.b_bbl_boxscore, using only rows where minutes is not null",
-    "sql": "SELECT split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0 AS minutes,\n       pts,\n       player_name,\n       player_team\nFROM bronze.b_bbl_boxscore\nWHERE minutes ~ '^[0-9]{1,3}:[0-9]{2}$'\n  AND minutes <> '00:00'\n  AND pts IS NOT NULL\nLIMIT 500",
-    "tables": [
-      "bronze.b_bbl_boxscore"
-    ],
-    "tags": [
-      "draw",
-      "scatter",
-      "minutes",
-      "points",
+      "score",
+      "quarter",
       "bbl"
     ],
-    "doc": "Boxscore minutes are text in MM:SS format. Convert them to decimal minutes before charting."
+    "doc": "There can be multiple games of the same teams. If there are multiple games, calculate the score after each quarter separately for each game and return all results. It is possible that the user does not specify a league. In that case check across all availabe leagues and return all results specifying in which league each game took place."
   },
   {
-    "question": "Compare EuroLeague player scoring efficiency from silver.s_el_player_stats_prospiel and gold.g_el_players",
-    "sql": "SELECT s.player_name,\n       s.player_team,\n       COUNT(*) AS games_played,\n       SUM(s.pts) AS total_pts,\n       ROUND(AVG(s.pts)::numeric, 2) AS avg_pts_per_game\nFROM silver.s_el_player_stats_prospiel AS s\nGROUP BY s.player_name, s.player_team\nHAVING COUNT(*) >= 5\nORDER BY total_pts DESC\nLIMIT 25",
-    "tables": [
-      "silver.s_el_player_stats_prospiel",
-      "gold.g_el_players"
-    ],
-    "tags": [
-      "silver",
-      "gold",
-      "euroleague",
-      "efficiency",
-      "points",
-      "player"
-    ],
-    "doc": "When a join key is uncertain, prefer a reliable silver aggregation over inventing a fragile join. Use gold only when column names clearly match."
-  },
-  {
-    "question": "How many rows are in each bronze table?",
-    "sql": "SELECT 'b_bbl_boxscore' AS table_name, COUNT(*) AS row_count FROM bronze.b_bbl_boxscore\nUNION ALL SELECT 'b_bbl_playbyplay', COUNT(*) FROM bronze.b_bbl_playbyplay\nUNION ALL SELECT 'b_bbl_player_info', COUNT(*) FROM bronze.b_bbl_player_info\nUNION ALL SELECT 'b_bbl_team_image', COUNT(*) FROM bronze.b_bbl_team_image\nUNION ALL SELECT 'b_bbl_wurfposition', COUNT(*) FROM bronze.b_bbl_wurfposition\nUNION ALL SELECT 'b_cl_boxscore', COUNT(*) FROM bronze.b_cl_boxscore\nUNION ALL SELECT 'b_cl_hist_links', COUNT(*) FROM bronze.b_cl_hist_links\nUNION ALL SELECT 'b_cl_playbyplay', COUNT(*) FROM bronze.b_cl_playbyplay\nUNION ALL SELECT 'b_cl_player_info', COUNT(*) FROM bronze.b_cl_player_info\nUNION ALL SELECT 'b_cl_player_info_alt', COUNT(*) FROM bronze.b_cl_player_info_alt\nUNION ALL SELECT 'b_cl_player_info_test', COUNT(*) FROM bronze.b_cl_player_info_test\nUNION ALL SELECT 'b_ec_boxscore', COUNT(*) FROM bronze.b_ec_boxscore\nUNION ALL SELECT 'b_ec_playbyplay', COUNT(*) FROM bronze.b_ec_playbyplay\nUNION ALL SELECT 'b_ec_player_info', COUNT(*) FROM bronze.b_ec_player_info\nUNION ALL SELECT 'b_el_boxscore', COUNT(*) FROM bronze.b_el_boxscore\nUNION ALL SELECT 'b_el_playbyplay', COUNT(*) FROM bronze.b_el_playbyplay\nUNION ALL SELECT 'b_el_player_info', COUNT(*) FROM bronze.b_el_player_info\nUNION ALL SELECT 'b_el_wurfposition', COUNT(*) FROM bronze.b_el_wurfposition\nORDER BY table_name",
-    "tables": [
-      "bronze"
-    ],
-    "tags": [
-      "row",
-      "count",
-      "metadata",
-      "bronze",
-      "compare",
-      "euroleague",
-      "eurocup",
-      "bbl",
-      "champions league"
-    ],
-    "doc": "Table names cannot be parameterized as SQL values, so a single grouped query can't compute per-table row counts. The fix is a UNION ALL with one SELECT 'literal_table_name', COUNT(*) FROM schema.table_name per table, listing each table explicitly by name - this is real, executable SQL, not a limitation to explain away. Use this same technique for 'compare row counts across EuroLeague/EuroCup/BBL/Champions League' style questions too: filter the UNION ALL to just the b_el_/b_ec_/b_bbl_/b_cl_ tables the question asks about, verified working against the live database with real row counts."
-  },
-  {
-    "question": "Which players have the most rows in bronze.b_el_boxscore?",
-    "sql": "SELECT player_name, COUNT(*) AS row_count\nFROM bronze.b_el_boxscore\nGROUP BY player_name\nORDER BY row_count DESC\nLIMIT 25",
-    "tables": [
-      "bronze.b_el_boxscore"
-    ],
-    "tags": [
-      "count",
-      "player",
-      "euroleague",
-      "rows"
-    ],
-    "doc": "Use COUNT(*) for row-frequency questions, not SUM(pts)."
-  },
-  {
-    "question": "Who made the most three-pointers in EuroLeague season 2025-2026?",
-    "sql": "SELECT player_name, SUM(three_p) AS threes_made\nFROM bronze.b_el_boxscore\nWHERE date >= '2025-08-01' AND date < '2026-08-01'\nGROUP BY player_name\nORDER BY threes_made DESC\nLIMIT 10",
-    "tables": [
-      "bronze.b_el_boxscore"
-    ],
-    "tags": [
-      "season",
-      "2025-2026",
-      "three_p",
-      "date",
-      "euroleague",
-      "eurocup"
-    ],
-    "doc": "bronze tables have no season column, only date - a query for a named season MUST filter date to that season's range (August of the first year through July of the next, since the competition year crosses the calendar year boundary) or it silently mixes every season together. GROUP BY player_name alone, not (player_name, player_team): mid-season sponsor renames give the same player two team-name rows in one season."
-  },
-  {
-    "question": "Which EuroCup team scored the most total points this season?",
-    "sql": "WITH normalized AS (\n  SELECT CASE home_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE home_team\n         END AS team,\n         link, MAX(home_team_total_point) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY home_team, link\n  UNION ALL\n  SELECT CASE away_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE away_team\n         END AS team,\n         link, MAX(away_team_total_point) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY away_team, link\n)\nSELECT team, SUM(pts) AS total_pts\nFROM normalized\nGROUP BY team\nORDER BY total_pts DESC\nLIMIT 10",
-    "tables": [
-      "bronze.b_ec_boxscore"
-    ],
-    "tags": [
-      "team",
-      "points",
-      "total",
-      "rank",
-      "top",
-      "eurocup",
-      "euroleague",
-      "rename",
-      "sponsor"
-    ],
-    "doc": "TWO separate required steps, both load-bearing - dropping either one silently corrupts the answer: (1) home_team_total_point/away_team_total_point repeat on every player row of a game (~23-24 rows per team per game, all identical) - you MUST collapse to one row per team-game first via GROUP BY team, link and MAX(...), never SUM the raw per-player rows directly, or the total overcounts by roughly the roster size (verified: 2073 correct vs 48556 when this step is dropped, a 23x error). (2) Team-level aggregation must ALSO normalize mid-season sponsor-renamed team names to one canonical name via CASE WHEN before grouping, or a renamed team's points silently split across two rows and it drops out of the ranking entirely (verified: HAPOEL MIDTOWN JERUSALEM never appears in the EuroCup top 10 without this; correctly ranks 6th at 1810 combined points with it). Both steps are independent of each other - do not skip the MAX(...) dedup just because a question does not mention renamed teams."
-  },
-  {
-    "question": "Which BBL team scored the most total points in the 2024-25 season?",
-    "sql": "SELECT team, SUM(pts) AS total_pts, COUNT(*) AS games\nFROM (\n  SELECT home_team AS team, home_team_total_point AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-08-01' AND date < '2025-08-01'\n  UNION ALL\n  SELECT away_team AS team, away_team_total_point AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-08-01' AND date < '2025-08-01'\n) sub\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_pts DESC\nLIMIT 10",
-    "tables": [
-      "silver.s_bbl_ptstotal"
-    ],
-    "tags": [
-      "team",
-      "points",
-      "total",
-      "rank",
-      "top",
-      "bottom",
-      "average",
-      "bbl",
-      "bundesliga",
-      "cup",
-      "phantom"
-    ],
-    "doc": "BBL team-level aggregation must exclude ProA cup opponents with HAVING COUNT(*) > 2 on the team-game grouping, or 6-7 phantom cup-opponent teams (each with only 1-2 games all season) get counted alongside the ~17-18 real Bundesliga teams - verified against live data: 24 raw team names drop to 17 real ones after filtering. Never changes who ranks #1 (phantom teams have tiny totals from so few games) but corrupts team counts, bottom-N rankings, and any per-team average."
-  },
-  {
-    "question": "What is the average three-point shooting percentage for players in the Champions League 2024-25 season, minimum 50 attempts?",
-    "sql": "WITH qualifying AS (\n  SELECT player_name, SUM(three_pa) AS attempts, SUM(three_p) AS made\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2024-08-01' AND date < '2025-08-01'\n  GROUP BY player_name\n  HAVING SUM(three_pa) >= 50\n)\nSELECT SUM(made) * 100.0 / SUM(attempts) AS avg_three_p_pct, COUNT(*) AS qualifying_players\nFROM qualifying",
+    "question": "Wie hoch ist die durchschnittliche Dreipunktequote der Spieler in der Champions-League-Saison 2024-25 (mindestens 50 Versuche)?",
+    "sql": "WITH qualifying AS (\n  SELECT player_name, SUM(three_pa) AS attempts, SUM(three_p) AS made\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2024-07-15' AND date < '2025-07-15'\n  GROUP BY player_name\n  HAVING SUM(three_pa) >= 50\n)\nSELECT SUM(made) * 100.0 / SUM(attempts) AS avg_three_p_pct, COUNT(*) AS qualifying_players\nFROM qualifying",
     "tables": [
       "bronze.b_cl_boxscore"
     ],
@@ -210,67 +76,16 @@
     "doc": "An 'average X, minimum N attempts' question needs a TWO-LEVEL aggregate, not a leaderboard: first collapse to one row per player-season with GROUP BY player_name and HAVING SUM(attempts) >= N (N is a season total, never a per-row WHERE filter - a single game essentially never has 50 three-point attempts, so WHERE three_pa >= 50 silently returns zero rows), then aggregate that qualifying set into the final single number. Do not answer with ORDER BY pct DESC LIMIT 20 and let the summary step average the returned rows - verified against live data: the true average across all 47 qualifying players is 37.4%, but averaging only the top 20 by percentage gives a biased 43.6%."
   },
   {
-    "question": "What was Real Madrid's win-loss record in the EuroLeague 2025-26 season?",
-    "sql": "WITH deduped AS (\n  SELECT link, home_team, away_team, MAX(home_team_total_point) AS home_pts, MAX(away_team_total_point) AS away_pts\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY link, home_team, away_team\n),\nreoriented AS (\n  SELECT home_team AS team, home_pts AS team_pts, away_pts AS opp_pts FROM deduped\n  UNION ALL\n  SELECT away_team AS team, away_pts AS team_pts, home_pts AS opp_pts FROM deduped\n)\nSELECT\n  COUNT(*) AS games_played,\n  SUM(CASE WHEN team_pts > opp_pts THEN 1 ELSE 0 END) AS wins,\n  SUM(CASE WHEN team_pts < opp_pts THEN 1 ELSE 0 END) AS losses\nFROM reoriented\nWHERE team ILIKE '%REAL MADRID%'",
-    "tables": [
-      "bronze.b_el_boxscore"
-    ],
-    "tags": [
-      "record",
-      "win",
-      "wins",
-      "loss",
-      "losses",
-      "win-loss",
-      "w-l",
-      "season"
-    ],
-    "doc": "A team's win-loss record needs the UNION ALL reorientation pattern (one row per team-game, deduplicated first per the boxscore-duplication note) with BOTH branches relabeled to team_pts/opp_pts before comparing - never keep raw home_pts/away_pts columns after the UNION and compare those directly, and never write a CASE that only checks the home-team win condition. Both mistakes silently drop every away game for the target team. Verified against live data: a query checking only 'home_team ILIKE team AND home_pts > away_pts' reported Real Madrid 35-9 for the full season; the real record, from this correctly reoriented query, is 28-16 - a materially different, wrong record, not just an imprecise one. This mistake recurs often even when the lesson has been taught before - double-check every win-loss query against this exact pattern rather than improvising a new one."
-  },
-  {
-    "question": "Aus welchen Ländern kamen die meisten Punkte in der Champions-League-Saison 2025–2026?",
-    "sql": "WITH info AS (\n  SELECT DISTINCT ON (btrim(player_name))\n         btrim(player_name) AS player_name, nationality\n  FROM bronze.b_cl_player_info\n),\nsaison AS (\n  SELECT btrim(player_name) AS player_name, SUM(pts) AS punkte\n  FROM bronze.b_cl_boxscore\n  WHERE date >= '2025-08-01' AND date < '2026-08-01'\n  GROUP BY 1\n)\nSELECT i.nationality, COUNT(*) AS spieler, SUM(s.punkte) AS punkte\nFROM saison s\nJOIN info i USING (player_name)\nGROUP BY 1\nORDER BY punkte DESC",
-    "tables": [
-      "bronze.b_cl_boxscore",
-      "bronze.b_cl_player_info"
-    ],
-    "tags": [
-      "nationality",
-      "country",
-      "land",
-      "länder",
-      "player_info",
-      "join",
-      "distinct on",
-      "duplicate",
-      "champions league",
-      "points",
-      "punkte",
-      "season"
-    ],
-    "doc": "Joining a boxscore to a *_player_info table needs DISTINCT ON. player_info holds ONE ROW PER CRAWLED SEASON per player - 206 of 1165 Champions League players have 2-4 rows - so a plain JOIN fans out and multiplies their points by that row count. Verified against live data: without DISTINCT ON, USA came out at 17752 points instead of 9813, and the inflation is NOT uniform, so the ranking itself changes (Turkey rose from 6th to 3rd, Germany fell from 5th to 7th). Also note: player_info has NO season column, so the season must be filtered on the boxscore side and only then joined for the attribute - filtering player_info alone silently mixes every crawled season. Use btrim() on both sides of the name join; without it players with stray whitespace drop out entirely. Champions League has three profile tables (b_cl_player_info, _alt, _test) - b_cl_player_info is the canonical one."
-  },
-  {
-    "question": "Wer war in der BBL-Saison 2025–2026 der beste Rebounder jedes Teams (mindestens 15 Spiele)?",
-    "sql": "WITH je_spieler AS (\n  SELECT player_team AS team,\n         btrim(player_name) AS spieler,\n         COUNT(*) AS spiele,\n         ROUND(AVG(reb), 2) AS reb_schnitt\n  FROM bronze.b_bbl_boxscore\n  WHERE date_final >= '2025-08-01' AND date_final < '2026-08-01'\n  GROUP BY 1, 2\n  HAVING COUNT(*) >= 15\n),\nrang AS (\n  SELECT *, ROW_NUMBER() OVER (PARTITION BY team ORDER BY reb_schnitt DESC) AS rn\n  FROM je_spieler\n)\nSELECT team, spieler, spiele, reb_schnitt\nFROM rang\nWHERE rn = 1\nORDER BY reb_schnitt DESC",
+    "question": "Welcher Spieler hat die meisten offensive Rebounds in der BBL Saison 2025/26?",
+    "sql": "SELECT player_name, SUM(drb) AS total_defensive_rebounds FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL' GROUP BY player_name ORDER BY total_defensive_rebounds DESC LIMIT 1",
     "tables": [
       "bronze.b_bbl_boxscore"
     ],
     "tags": [
-      "rebounds",
-      "rebounder",
-      "best per team",
-      "per group",
-      "row_number",
-      "partition by",
-      "window function",
-      "rank",
-      "bbl",
-      "bundesliga",
-      "minimum",
-      "games"
+      "offensive rebounds",
+      "bbl"
     ],
-    "doc": "A 'best X per team/group' question needs ROW_NUMBER() OVER (PARTITION BY group ORDER BY metric DESC) in a CTE, then WHERE rn = 1 - not a plain GROUP BY, which cannot return the row that produced the maximum. Two traps specific to this database. First, do NOT source this from gold.g_player_profile_*: its pts/reb/trb columns are ALREADY per-game averages, so dividing them by gp again yields rebounds-per-game-per-game, which systematically favours players with few games - verified against live data, that mistake picked the wrong player for 8 of 18 BBL teams. Second, g_player_profile_bbl is incomplete (265 players), so several teams' actual best rebounder does not exist in it at all; any question about coverage across all teams or all players must come from the bronze boxscore. Use player_team for the player's own team - home_team_final/away_team_final are the fixture, not the player's team."
+    "doc": "nan"
   },
   {
     "question": "Welche Spieler in der Bundesliga kommen aus Deutschland?",
@@ -292,5 +107,634 @@
       "ilike"
     ],
     "doc": "Country filters must use the spelling of the league's own table, and always ILIKE, never '='. b_bbl_player_info stores nationality in GERMAN with a 2-letter ISO code in brackets, so ILIKE '%Germany%' matches 0 of 859 rows while ILIKE '%Deutschland%' matches 392 - verified against live data. The bracket is not reliable either (260 rows 'Deutschland (DE)', 70 rows plain 'Deutschland'), and dual nationals hold both countries in one cell separated by a newline (86 rows), so a substring match is the only form that catches all three shapes. DISTINCT ON is required because player_info holds one row per crawled season: 392 rows correspond to 304 distinct players. The encoding differs per league - EuroLeague and EuroCup use English full names ('Germany', and EC writes 'Turkiye'), Champions League uses 3-letter codes ('GER') with comma-separated duals - so this literal must be changed per league and a single cross-league country query is not possible."
+  },
+  {
+    "question": "Welche BBL-Spieler hatten in der Saison 2025–2026 die beste effektive Feldwurfquote (eFG%) bei mindestens 250 Wurfversuchen?",
+    "sql": "SELECT\n  player_name,\n  SUM(fga) AS fga,\n  ROUND((SUM(fgm) + 0.5 * SUM(three_p))::numeric / NULLIF(SUM(fga), 0), 4) AS efg_pct\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nHAVING SUM(fga) >= 250\nORDER BY efg_pct DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wie war die Sieg-Niederlage-Bilanz von Real Madrid in der EuroLeague-Saison 2025–2026?",
+    "sql": "WITH games AS (\n  SELECT link, home_team, away_team,\n         MAX(home_team_tot_pts) AS home_pts,\n         MAX(away_team_tot_pts) AS away_pts\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n  GROUP BY link, home_team, away_team\n),\nreoriented AS (\n  SELECT home_team AS team, home_pts AS team_pts, away_pts AS opp_pts FROM games\n  UNION ALL\n  SELECT away_team AS team, away_pts AS team_pts, home_pts AS opp_pts FROM games\n)\nSELECT\n  SUM(CASE WHEN UPPER(team) = 'REAL MADRID' AND team_pts > opp_pts THEN 1 ELSE 0 END) AS wins,\n  SUM(CASE WHEN UPPER(team) = 'REAL MADRID' AND team_pts < opp_pts THEN 1 ELSE 0 END) AS losses\nFROM reoriented\nWHERE UPPER(team) = 'REAL MADRID'",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wie viele Würfe nahm der Spieler A. Best in der Eurocup Saison 2024/25?",
+    "sql": "SELECT   SUM(two_pa + three_pa) AS total_shots FROM bronze.b_ec_boxscore WHERE date >= '2024-07-15' AND date < '2025-07-15'  AND player_name ILIKE '%Best%'",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "throws",
+      "count",
+      "ec"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie hoch war die Erfolgsrate des FC Bayern München in der BBL in der Saison 2025/2026 bei Fieldgoals, Dreiern und Freiwürfen?",
+    "sql": "SELECT\n    SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0) AS fg_percent,\n    SUM(three_p) * 100.0 / NULLIF(SUM(three_pa), 0) AS three_p_percent,\n    SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0) AS ft_percent\nFROM bronze.b_bbl_boxscore\nWHERE player_team = 'FC BAYERN MÜNCHEN BASKETBALL'\n  AND date >= '2025-07-01'\n  AND date < '2026-06-01';",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "success",
+      "rate",
+      "field goal",
+      "three-point",
+      "free throw",
+      "season",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welche Bundesliga Spieler hat die meisten Punkte aus der Saison 2025-2026?",
+    "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY total_pts DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wie viele Würfe nahm der Spieler A. Obst in der BBL Saison 2025/26?",
+    "sql": "SELECT   SUM(two_pa + three_pa) AS total_shots FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15'   AND competition = 'easyCredit BBL'   AND player_name ILIKE '%Obst%'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "throws",
+      "count",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welches BBL-Team hatte in der Saison 2025–2026 die beste Punktedifferenz pro Spiel (mindestens 20 Spiele)?",
+    "sql": "WITH team_stats AS (\n  SELECT\n    player_team AS team,\n    link,\n    SUM(pts) AS pts_for\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY player_team, link\n),\nopp_stats AS (\n  SELECT\n    CASE WHEN player_team = home_team THEN away_team ELSE home_team END AS team,\n    link,\n    SUM(pts) AS pts_against\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY CASE WHEN player_team = home_team THEN away_team ELSE home_team END, link\n)\nSELECT\n  t.team,\n  ROUND((SUM(t.pts_for) - SUM(o.pts_against))::numeric / COUNT(*), 2) AS diff_per_game\nFROM team_stats t\nJOIN opp_stats o ON t.team = o.team AND t.link = o.link\nGROUP BY t.team\nHAVING COUNT(*) >= 20\nORDER BY diff_per_game DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welche sind die Top 5 Spieler mit den meisten Punkten und Assists in der BBL Saison 2025/26?",
+    "sql": "SELECT \n  player_name,\n  SUM(pts) AS total_points,\n  SUM(ast) AS total_assists\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY total_points DESC, total_assists DESC\nLIMIT 5",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "points",
+      "assists",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welche Mannschaft hat die meisten Punkte in der BBL in der Saison 2025/2026 erzielt?",
+    "sql": "SELECT player_team AS team, SUM(pts) AS total_pts\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_pts DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "['points, 'total', 'season', 'bbl']"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welches EuroCup-Team erzielte in dieser Saison die meisten Punkte insgesamt?",
+    "sql": "WITH normalized AS (\n  SELECT CASE home_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE home_team\n         END AS team,\n         link, MAX(home_team_tot_pts) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n  GROUP BY home_team, link\n  UNION ALL\n  SELECT CASE away_team\n           WHEN 'HAPOEL BANK YAHAV JERUSALEM' THEN 'HAPOEL MIDTOWN JERUSALEM'\n           WHEN 'PANIONIOS ATHENS' THEN 'PANIONIOS COSMORAMA TRAVEL ATHENS'\n           ELSE away_team\n         END AS team,\n         link, MAX(away_team_tot_pts) AS pts\n  FROM bronze.b_ec_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n  GROUP BY away_team, link\n)\nSELECT team, SUM(pts) AS total_pts\nFROM normalized\nGROUP BY team\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "team",
+      "points",
+      "total",
+      "rank",
+      "top",
+      "eurocup",
+      "euroleague",
+      "rename",
+      "sponsor"
+    ],
+    "doc": "TWO separate required steps, both load-bearing - dropping either one silently corrupts the answer: (1) home_team_tot_pts/away_team_tot_pts repeat on every player row of a game (~23-24 rows per team per game, all identical) - you MUST collapse to one row per team-game first via GROUP BY team, link and MAX(...), never SUM the raw per-player rows directly, or the total overcounts by roughly the roster size (verified: 2073 correct vs 48556 when this step is dropped, a 23x error). (2) Team-level aggregation must ALSO normalize mid-season sponsor-renamed team names to one canonical name via CASE WHEN before grouping, or a renamed team's points silently split across two rows and it drops out of the ranking entirely (verified: HAPOEL MIDTOWN JERUSALEM never appears in the EuroCup top 10 without this; correctly ranks 6th at 1810 combined points with it). Both steps are independent of each other - do not skip the MAX(...) dedup just because a question does not mention renamed teams."
+  },
+  {
+    "question": "Welches Team hatte die meisten 3 Punkte letzte Saison in BBL?",
+    "sql": "WITH team_games AS (\n  SELECT player_team AS team, link, SUM(three_p) AS three_p\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY player_team, link\n)\nSELECT team, SUM(three_p) AS total_three_p\nFROM team_games\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_three_p DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welches Viertel war spielentscheidend? spiel Bayern gegen Alba am 2026-06-21 pts je viertel",
+    "sql": "SELECT\n  date,\n  home_team,\n  away_team,\n  quarter,\n  player_team AS team,\n  SUM(pts) AS pts\nFROM bronze.b_bbl_playbyplay\nWHERE date = '2026-06-21'\n  AND competition = 'easyCredit BBL'\n  AND ((home_team ILIKE '%FC BAYERN%' AND away_team ILIKE '%ALBA BERLIN%')\n    OR (home_team ILIKE '%ALBA BERLIN%' AND away_team ILIKE '%FC BAYERN%'))\nGROUP BY date, home_team, away_team, quarter, player_team\nORDER BY date, quarter, player_team;",
+    "tables": [
+      "bronze.b_bbl_playbyplay"
+    ],
+    "tags": [
+      "quarter",
+      "lead",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hat in der EuroLeague-Saison 2025–2026 die meisten Dreipunktewürfe erzielt?",
+    "sql": "SELECT player_name, SUM(three_p) AS threes_made\nFROM bronze.b_el_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_name\nORDER BY threes_made DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welcher Spieler hat in der BBL die meisten Punkte erzielt?",
+    "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_bbl_boxscore\nGROUP BY player_name\nORDER BY total_pts DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wer hat die meisten Assists in der BBL Saison 2025/26?",
+    "sql": "SELECT player_name, player_team, ast_ges FROM (  SELECT player_name, player_team, SUM(ast) AS ast_ges, RANK() OVER (ORDER BY SUM(ast) DESC) AS rnk  FROM bronze.b_bbl_boxscore   WHERE date >= '2025-09-26'   AND competition = 'easyCredit BBL'   GROUP BY player_name, player_team ) t  WHERE rnk = 1;",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "assists",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welches BBL-Team erzielte in der Saison 2024-25 die meisten Punkte insgesamt?",
+    "sql": "SELECT team, SUM(pts) AS total_pts, COUNT(*) AS games\nFROM (\n  SELECT home_team AS team, home_team_tot_pts AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-07-15' AND date < '2025-07-15'\n  UNION ALL\n  SELECT away_team AS team, away_team_tot_pts AS pts FROM silver.s_bbl_ptstotal WHERE date >= '2024-07-15' AND date < '2025-07-15'\n) sub\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_pts DESC\nLIMIT 10",
+    "tables": [
+      "silver.s_bbl_ptstotal"
+    ],
+    "tags": [
+      "team",
+      "points",
+      "total",
+      "rank",
+      "top",
+      "bottom",
+      "average",
+      "bbl",
+      "bundesliga",
+      "cup",
+      "phantom"
+    ],
+    "doc": "BBL team-level aggregation must exclude ProA cup opponents with HAVING COUNT(*) > 2 on the team-game grouping, or 6-7 phantom cup-opponent teams (each with only 1-2 games all season) get counted alongside the ~17-18 real Bundesliga teams - verified against live data: 24 raw team names drop to 17 real ones after filtering. Never changes who ranks #1 (phantom teams have tiny totals from so few games) but corrupts team counts, bottom-N rankings, and any per-team average."
+  },
+  {
+    "question": "Wie viele Führungswechsel gab es im Spiel FC Bayern München gegen Alba Berlin am 10.6.2024?",
+    "sql": "WITH PLAY_SCORES AS (\n    SELECT\n        DATE,\n        QUARTER,\n        PLAYER_TEAM,\n        PTS,\n\n        -- LAUFENDER SPIELSTAND JE TEAM\n        SUM(PTS) OVER (\n            PARTITION BY DATE, PLAYER_TEAM\n            ORDER BY QUARTER\n            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n        ) AS TEAM_SCORE\n\n    FROM BRONZE.B_BBL_PLAYBYPLAY\n    WHERE DATE = '2024-06-10'\n),\n\nSCORES AS (\n    SELECT\n        DATE,\n        QUARTER,\n        MAX(CASE\n            WHEN PLAYER_TEAM ILIKE '%BAYERN%'\n            THEN TEAM_SCORE\n        END) AS BAYERN_SCORE,\n\n        MAX(CASE\n            WHEN PLAYER_TEAM ILIKE '%ALBA%'\n            THEN TEAM_SCORE\n        END) AS ALBA_SCORE\n\n    FROM PLAY_SCORES\n    GROUP BY\n        DATE,\n        QUARTER\n       \n),\n\nLEADERS AS (\n    SELECT\n        *,\n        CASE\n            WHEN BAYERN_SCORE > ALBA_SCORE THEN 'BAYERN'\n            WHEN ALBA_SCORE > BAYERN_SCORE THEN 'ALBA'\n            ELSE 'TIE'\n        END AS LEADER\n    FROM SCORES\n),\n\nPREVIOUS_LEADER AS (\n    SELECT\n        *,\n        LAG(LEADER) OVER (\n            ORDER BY QUARTER\n        ) AS PREV_LEADER\n    FROM LEADERS\n)\n\nSELECT\n    COUNT(*) AS ANZAHL_FUEHRUNGSWECHSEL\nFROM PREVIOUS_LEADER\nWHERE LEADER <> 'TIE'\n  AND PREV_LEADER <> 'TIE'\n  AND LEADER <> PREV_LEADER;",
+    "tables": [
+      "bronze.b_bbl_playbyplay"
+    ],
+    "tags": [
+      "change",
+      "lead",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie viele Point Guards spielten in der BBL-Saison 2025–2026?",
+    "sql": "SELECT COUNT(DISTINCT player_name) AS point_guards\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  AND player_name ILIKE '%(PG)%'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welche Mannschaft hat die meisten erfolgreichen 2 Punktewürfe in der BBL in der Saison 2025/2026?",
+    "sql": "SELECT player_team AS team, SUM(two_p) AS total_two_p\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_two_p DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "two-point",
+      "season",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie viele Punkte erzielte der Spieler Andreas Obst  pro Minute in der Saison 2025-2026 in der BBL?",
+    "sql": "SELECT  SUM(pts) / SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0) AS pts_per_minute  FROM bronze.b_bbl_boxscore  WHERE player_name ILIKE 'Obst A%'    AND date >= '2025-07-15'\n AND date < '2026-07-15'   AND competition = 'easyCredit BBL'   AND minutes != '00:00'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "points",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welche Mannschaft hat die meisten erfolgreichen 3 Punktewürfe in der BBL in der Saison 2025/2026?",
+    "sql": "SELECT player_team AS team, SUM(three_p) AS total_three_p\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_team\nORDER BY total_three_p DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "three-point",
+      "season",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hat die meisten erfolgreichen 2er Punkte in der BBL Saison 2025/26 geworfen?",
+    "sql": "SELECT player_name, SUM(two_p) AS total_two_p FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL' GROUP BY player_name ORDER BY total_two_p DESC LIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "two-point",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hat die meisten Punkte in der BBL Saison 2025/26 erzielt?",
+    "sql": "SELECT player_name, SUM(pts) AS total_pts FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL' GROUP BY player_name ORDER BY total_pts DESC LIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "points",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie viele Minuten spielte Andreas Obst in der Saison 2025-2026 in der BBL durchschnittlich pro Spiel?",
+    "sql": "SELECT\n  AVG(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0) AS avg_minutes_per_game\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE 'Obst A%'\n  AND date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\n  AND minutes != '00:00'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "minutes",
+      "bbl",
+      "season"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welches Team hatte die meisten Ballverluste in der Euroleague in der Saison 2024-2025?",
+    "sql": "WITH team_games AS (\n  SELECT player_team AS team, link, SUM(tov) AS tov\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2024-07-15' AND date < '2025-07-15' \n  GROUP BY player_team, link\n)\nSELECT team, SUM(tov) AS total_tov\nFROM team_games\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_tov DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "el",
+      "turnovers"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer war in der BBL-Saison 2025–2026 der beste Rebounder jedes Teams (mindestens 15 Spiele)?",
+    "sql": "WITH je_spieler AS (\n  SELECT player_team AS team,\n         btrim(player_name) AS spieler,\n         COUNT(*) AS spiele,\n         ROUND(AVG(reb), 2) AS reb_schnitt\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY 1, 2\n  HAVING COUNT(*) >= 15\n),\nrang AS (\n  SELECT *, ROW_NUMBER() OVER (PARTITION BY team ORDER BY reb_schnitt DESC) AS rn\n  FROM je_spieler\n)\nSELECT team, spieler, spiele, reb_schnitt\nFROM rang\nWHERE rn = 1\nORDER BY reb_schnitt DESC",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "rebounds",
+      "rebounder",
+      "best per team",
+      "per group",
+      "row_number",
+      "partition by",
+      "window function",
+      "rank",
+      "bbl",
+      "bundesliga",
+      "minimum",
+      "games"
+    ],
+    "doc": "A 'best X per team/group' question needs ROW_NUMBER() OVER (PARTITION BY group ORDER BY metric DESC) in a CTE, then WHERE rn = 1 - not a plain GROUP BY, which cannot return the row that produced the maximum. Two traps specific to this database. First, do NOT source this from gold.g_player_profile_*: its pts/reb/trb columns are ALREADY per-game averages, so dividing them by gp again yields rebounds-per-game-per-game, which systematically favours players with few games - verified against live data, that mistake picked the wrong player for 8 of 18 BBL teams. Second, g_player_profile_bbl is incomplete (265 players), so several teams' actual best rebounder does not exist in it at all; any question about coverage across all teams or all players must come from the bronze boxscore. Use player_team for the player's own team - home_team/away_team are the fixture, not the player's team."
+  },
+  {
+    "question": "Welcher EuroCup-Spieler hatte in der Saison 2025-2026 die meisten Assists?",
+    "sql": "SELECT player_name, SUM(ast) AS total_ast\nFROM bronze.b_ec_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\nGROUP BY player_name\nORDER BY total_ast DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "eurocup",
+      "assists"
+    ],
+    "doc": "Test entry for the JSON upload feature. Verified against live data: VELICKA, ARNAS leads with 131 assists."
+  },
+  {
+    "question": "Welcher EuroLeague-Spieler hatte in der Saison 2025–2026 das beste Verhältnis von Steals zu Fouls (mindestens 20 Spiele)?",
+    "sql": "SELECT player_name, stl, pf, stl / pf AS ratio\nFROM gold.g_player_profile_euroleague\nWHERE season = '2025-2026'\n  AND gp >= 20\n  AND stl >= 1.0\n  AND pf > 0\nORDER BY ratio DESC\nLIMIT 1",
+    "tables": [
+      "gold.g_player_profile_euroleague"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "euroleague"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Welches Team führte die BBL-Saison 2025–2026 bei der durchschnittlichen Punktdifferenz pro Spiel an (Mindestvoraussetzung: 20 Spiele)?",
+    "sql": "WITH team_stats AS (\n  SELECT\n    player_team AS team,\n    link,\n    SUM(pts) AS pts_for\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY player_team, link\n),\nopp_stats AS (\n  SELECT\n    CASE WHEN player_team = home_team THEN away_team ELSE home_team END AS team,\n    link,\n    SUM(pts) AS pts_against\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY CASE WHEN player_team = home_team THEN away_team ELSE home_team END, link\n)\nSELECT\n  t.team,\n  ROUND((SUM(t.pts_for) - SUM(o.pts_against))::numeric / COUNT(*), 2) AS diff_per_game\nFROM team_stats t\nJOIN opp_stats o ON t.team = o.team AND t.link = o.link\nGROUP BY t.team\nHAVING COUNT(*) >= 20\nORDER BY diff_per_game DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Was war die höchste Führung im Spiel FC Bayern München gegen Alba Berlin am 10.6.2024",
+    "sql": "WITH game_teams AS (\n  SELECT home_team, away_team\n  FROM bronze.b_bbl_playbyplay\n  WHERE date = '2024-06-10'\n  LIMIT 1\n),\ncumulative AS (\n  SELECT\n    quarter,\n    player_team,\n    game_time,\n    SUM(pts) OVER (PARTITION BY player_team, quarter ORDER BY (split_part(game_time, ':', 1)::int * 60 + split_part(game_time, ':', 2)::int) DESC) AS cum_pts\n  FROM bronze.b_bbl_playbyplay\n  WHERE date = '2024-06-10'\n    AND (home_team ILIKE '%FC BAYERN%' OR away_team ILIKE '%ALBA BERLIN%')\n),\nscores AS (\n  SELECT\n    c.quarter,\n    c.game_time,\n    MAX(CASE WHEN c.player_team = g.home_team THEN c.cum_pts END) AS home_pts,\n    MAX(CASE WHEN c.player_team = g.away_team THEN c.cum_pts END) AS away_pts\n  FROM cumulative c\n  CROSS JOIN game_teams g\n  GROUP BY c.quarter, c.game_time\n)\nSELECT MAX(ABS(home_pts - away_pts)) AS highest_lead\nFROM scores",
+    "tables": [
+      "bronze.b_bbl_playbyplay"
+    ],
+    "tags": [
+      "score",
+      "lead",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welche BBL-Spieler hatten in der Saison 2025–2026 das beste Verhältnis von Assists zu Ballverlusten (mindestens 20 Spiele und 50 Assists)?",
+    "sql": "WITH player_stats AS (\n  SELECT\n    player_name,\n    SUM(ast) AS total_ast,\n    SUM(tov) AS total_tov,\n    COUNT(*) AS gp\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY player_name\n  HAVING COUNT(*) >= 20 AND SUM(ast) >= 50\n)\nSELECT\n  player_name,\n  total_ast,\n  total_tov,\n  ROUND(total_ast::numeric / NULLIF(total_tov, 0), 2) AS ast_tov_ratio\nFROM player_stats\nORDER BY ast_tov_ratio DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Wer hat die meisten erfolgreichen 3er Punkte in der BBL Saison 2025/26 geworfen?",
+    "sql": "SELECT player_name, SUM(three_p) AS total_three_p FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'  GROUP BY player_name ORDER BY total_three_p DESC LIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "three-point",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie hat sich die Offensive des FC Bayern München in den letzten 10 Spielen in der BBL entwickelt?",
+    "sql": "SELECT\n  date,\n  player_team AS team,\n  SUM(pts) AS pts,\n  SUM(fgm) AS fgm,\n  SUM(fga) AS fga,\n  ROUND(SUM(fgm) * 100.0 / NULLIF(SUM(fga), 0), 1) AS fg_pct,\n  SUM(three_p) AS three_p,\n  SUM(three_pa) AS three_pa,\n  ROUND(SUM(three_p) * 100.0 / NULLIF(SUM(three_pa), 0), 1) AS three_pct,\n  SUM(ftm) AS ftm,\n  SUM(fta) AS fta,\n  ROUND(SUM(ftm) * 100.0 / NULLIF(SUM(fta), 0), 1) AS ft_pct\nFROM bronze.b_bbl_boxscore\nWHERE player_team ILIKE '%FC BAYERN%'\n  AND date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\nGROUP BY date, player_team\nORDER BY date DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "trend",
+      "last 10",
+      "bbl",
+      "offense"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie war der Spielstand nach jedem Viertel je Spiel FC Bayern München gegen Alba Berlin in der Saison 2025/26? gebe die einzelnen Begegnungen Heimmannschaft und Auswärtsmannschaft mit date und endstand nach jedem Viertel aus",
+    "sql": "SELECT\n  date,\n  home_team,\n  away_team,\n  quarter,\n  player_team AS team,\n  SUM(pts) AS pts\nFROM bronze.b_bbl_playbyplay\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\n  AND ((home_team ILIKE '%FC BAYERN%' AND away_team ILIKE '%ALBA BERLIN%')\n    OR (home_team ILIKE '%ALBA BERLIN%' AND away_team ILIKE '%FC BAYERN%'))\nGROUP BY date, home_team, away_team, quarter, player_team\nORDER BY date, quarter, player_team",
+    "tables": [],
+    "tags": [],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hatte die meisten Steals und Blocks in der BBL Saison 2025/26?",
+    "sql": "SELECT\n  player_name,\n  SUM(stl) AS stl,\n  SUM(blk) AS blk,\n  SUM(stl) + SUM(blk) AS stl_blk\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY player_name\nORDER BY stl_blk DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "steals",
+      "blocks",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welches BBL-Team hatte die meisten Ballverluste in der Saison 2025-2026?",
+    "sql": "WITH team_games AS (\n  SELECT player_team AS team, link, SUM(tov) AS tov\n  FROM bronze.b_bbl_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\n  GROUP BY player_team, link\n)\nSELECT team, SUM(tov) AS total_tov\nFROM team_games\nGROUP BY team\nHAVING COUNT(*) > 2\nORDER BY total_tov DESC\nLIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "bbl",
+      "turnovers"
+    ],
+    "doc": "Test entry for the JSON upload feature. Verified against live data: ALBA BERLIN leads with 713 turnovers. HAVING COUNT(*) > 2 excludes ProA cup opponents from the team-game grouping."
+  },
+  {
+    "question": "Wie ist die Plus/Minus-Bilanz von A. Obst in der Saison 2025/26 ?",
+    "sql": "SELECT  SUM(plus_minus) AS plus_minus_bilanz FROM bronze.b_bbl_boxscore WHERE player_name ILIKE 'Obst A%'   AND date >= '2025-07-15' AND date < '2026-07-15'   AND competition = 'easyCredit BBL'",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "plus minus",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie viele Punkte wurden im Spiel FC Bayern München gegen Alba Berlin am 10.6.2024 nach Ballverlusten erzielt? Berechne hierzu die Turnover und Punkte.",
+    "sql": "SELECT\n    quarter,\n    game_time,\n    player_team,\n    player_name,\n    description,\n    pts,\n    tov\nFROM bronze.b_bbl_playbyplay\nWHERE date = '2024-06-10'\n  AND (\n      tov > 0\n      or pts > 0\n  )\nORDER BY\n    quarter,\n    game_time;",
+    "tables": [
+      "bronze.b_bbl_playbyplay"
+    ],
+    "tags": [
+      "['points', 'turnover, 'bbl']"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Zeig mir als Balkendiagramm die EuroCup-Spieler mit den meisten Punkten.",
+    "sql": "SELECT player_name, SUM(pts) AS total_pts\nFROM bronze.b_ec_boxscore\nWHERE pts IS NOT NULL\nGROUP BY player_name\nHAVING SUM(pts) > 0\nORDER BY total_pts DESC\nLIMIT 20",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "draw",
+      "chart",
+      "bar",
+      "eurocup",
+      "points",
+      "player"
+    ],
+    "doc": "EuroCup bronze tables use the b_ec prefix."
+  },
+  {
+    "question": "Zeig mir als Liniendiagramm, wie sich die Punkte pro Spiel von Andreas Obst über die BBL-Saison 2025–2026 entwickelt haben.",
+    "sql": "SELECT date, SUM(pts) AS pts\nFROM bronze.b_bbl_boxscore\nWHERE player_name ILIKE 'Obst A%'\n  AND date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'\nGROUP BY date\nORDER BY date",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "saved",
+      "good",
+      "points",
+      "bbl"
+    ],
+    "doc": "Saved from user feedback as a good SQL example."
+  },
+  {
+    "question": "Zeig mir als Streudiagramm Punkte im Verhältnis zu gespielten Minuten für BBL-Spieler.",
+    "sql": "SELECT split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0 AS minutes,\n       pts,\n       player_name,\n       player_team\nFROM bronze.b_bbl_boxscore\nWHERE minutes ~ '^[0-9]{1,3}:[0-9]{2}$'\n  AND minutes <> '00:00'\n  AND pts IS NOT NULL\nLIMIT 500",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "draw",
+      "scatter",
+      "minutes",
+      "points",
+      "bbl"
+    ],
+    "doc": "Boxscore minutes are text in MM:SS format. Convert them to decimal minutes before charting."
+  },
+  {
+    "question": "Wie viele Punkte erzielte der Spieler Aaron Best pro Minute in der Saison 2024-2025 im Eurocup?",
+    "sql": "SELECT\n  player_name,\n  SUM(pts) / NULLIF(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 0) AS pts_per_minute\nFROM bronze.b_ec_boxscore\nWHERE date >= '2024-07-15' AND date < '2025-07-15'\n  AND player_name ILIKE '%Best%'\nGROUP BY player_name",
+    "tables": [
+      "bronze.b_ec_boxscore"
+    ],
+    "tags": [
+      "points",
+      "ec"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welcher Spieler traf am effizientesten in der BBL Saison 2025/26 von der Dreierlinie?",
+    "sql": "SELECT player_name, SUM(three_p) AS total_3pm, SUM(three_pa) AS total_3pa, ROUND(SUM(three_p) * 100.0 / NULLIF(SUM(three_pa), 0),2)  AS three_p_pct FROM bronze.b_bbl_boxscore \nWHERE date >= '2025-07-15' AND date < '2026-07-15'  AND competition = 'easyCredit BBL'  GROUP BY   player_name     HAVING SUM(three_pa) >= 50  ORDER BY   three_p_pct DESC LIMIT 1;",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "efficiency",
+      "points",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Welcher Spieler hat die meisten defensive Rebounds in der BBL Saison 2025/26?",
+    "sql": "SELECT player_name, SUM(drb) AS total_defensive_rebounds FROM bronze.b_bbl_boxscore WHERE date >= '2025-07-15' AND date < '2026-07-15' AND competition = 'easyCredit BBL'  GROUP BY player_name ORDER BY total_defensive_rebounds DESC LIMIT 1",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "defensive rebounds",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wer hat die meisten 3er getroffen in der BBL letzte Saison bezogen auf die Einsatzzeit. Stelle die Top 10 Spieler übersichtlich dar.",
+    "sql": "SELECT\n  player_name,\n  SUM(three_p) AS total_threes,\n  ROUND(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 1) AS total_minutes,\n  ROUND(SUM(three_p)::numeric / NULLIF(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 0), 4) AS threes_per_min\nFROM bronze.b_bbl_boxscore\nWHERE date >= '2025-07-15' AND date < '2026-07-15'\n  AND competition = 'easyCredit BBL'\n  AND minutes ~ '^[0-9]{1,3}:[0-9]{2}$'\n  AND minutes <> '00:00'\nGROUP BY player_name\nHAVING SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0) >= 200\nORDER BY threes_per_min DESC\nLIMIT 10",
+    "tables": [
+      "bronze.b_bbl_boxscore"
+    ],
+    "tags": [
+      "three-point",
+      "bbl"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Wie ist die defensive rebound rate von Real Madrid in der Saison 2025-2026 einzuschätzen?",
+    "sql": "SELECT team, season, drb_pct, drb_pct_opp\nFROM gold.g_el_teams\nWHERE season = '2025-2026'\n  AND UPPER(team) ILIKE '%REAL MADRID%'\nLIMIT 10",
+    "tables": [
+      "gold.g_el_teams"
+    ],
+    "tags": [
+      "rebound rate",
+      "el"
+    ],
+    "doc": "nan"
+  },
+  {
+    "question": "Gib mir die Euroleague Statistiken von Andreas Obst in den letzten 3 Jahren. Zuerst jede Saison einzeln und zum Schluss alle 3 Saisons zusammengefasst.",
+    "sql": "SELECT\n  saison,\n  games,\n  total_pts,\n  avg_pts,\n  total_reb,\n  avg_reb,\n  total_ast,\n  avg_ast,\n  total_stl,\n  total_blk,\n  total_tov,\n  fg_pct,\n  three_p_pct,\n  ft_pct,\n  total_minutes\nFROM (\n  SELECT\n    '2023-2024' AS saison,\n    COUNT(DISTINCT link) AS games,\n    SUM(pts) AS total_pts,\n    ROUND(SUM(pts)::numeric / COUNT(DISTINCT link), 1) AS avg_pts,\n    SUM(orb + drb) AS total_reb,\n    ROUND(SUM(orb + drb)::numeric / COUNT(DISTINCT link), 1) AS avg_reb,\n    SUM(ast) AS total_ast,\n    ROUND(SUM(ast)::numeric / COUNT(DISTINCT link), 1) AS avg_ast,\n    SUM(stl) AS total_stl,\n    SUM(blk) AS total_blk,\n    SUM(tov) AS total_tov,\n    ROUND(SUM(two_p)::numeric / NULLIF(SUM(two_pa), 0) * 100, 1) AS fg_pct,\n    ROUND(SUM(three_p)::numeric / NULLIF(SUM(three_pa), 0) * 100, 1) AS three_p_pct,\n    ROUND(SUM(ft)::numeric / NULLIF(SUM(fta), 0) * 100, 1) AS ft_pct,\n    ROUND(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 1) AS total_minutes\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2023-07-15' AND date < '2024-07-15'\n    AND UPPER(player_name) ILIKE 'OBST, ANDREAS%'\n  UNION ALL\n  SELECT\n    '2024-2025',\n    COUNT(DISTINCT link),\n    SUM(pts),\n    ROUND(SUM(pts)::numeric / COUNT(DISTINCT link), 1),\n    SUM(orb + drb),\n    ROUND(SUM(orb + drb)::numeric / COUNT(DISTINCT link), 1),\n    SUM(ast),\n    ROUND(SUM(ast)::numeric / COUNT(DISTINCT link), 1),\n    SUM(stl),\n    SUM(blk),\n    SUM(tov),\n    ROUND(SUM(two_p)::numeric / NULLIF(SUM(two_pa), 0) * 100, 1),\n    ROUND(SUM(three_p)::numeric / NULLIF(SUM(three_pa), 0) * 100, 1),\n    ROUND(SUM(ft)::numeric / NULLIF(SUM(fta), 0) * 100, 1),\n    ROUND(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 1)\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2024-07-15' AND date < '2025-07-15'\n    AND UPPER(player_name) ILIKE 'OBST, ANDREAS%'\n  UNION ALL\n  SELECT\n    '2025-2026',\n    COUNT(DISTINCT link),\n    SUM(pts),\n    ROUND(SUM(pts)::numeric / COUNT(DISTINCT link), 1),\n    SUM(orb + drb),\n    ROUND(SUM(orb + drb)::numeric / COUNT(DISTINCT link), 1),\n    SUM(ast),\n    ROUND(SUM(ast)::numeric / COUNT(DISTINCT link), 1),\n    SUM(stl),\n    SUM(blk),\n    SUM(tov),\n    ROUND(SUM(two_p)::numeric / NULLIF(SUM(two_pa), 0) * 100, 1),\n    ROUND(SUM(three_p)::numeric / NULLIF(SUM(three_pa), 0) * 100, 1),\n    ROUND(SUM(ft)::numeric / NULLIF(SUM(fta), 0) * 100, 1),\n    ROUND(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 1)\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2025-07-15' AND date < '2026-07-15'\n    AND UPPER(player_name) ILIKE 'OBST, ANDREAS%'\n  UNION ALL\n  SELECT\n    '2023-2026 (gesamt)',\n    COUNT(DISTINCT link),\n    SUM(pts),\n    ROUND(SUM(pts)::numeric / COUNT(DISTINCT link), 1),\n    SUM(orb + drb),\n    ROUND(SUM(orb + drb)::numeric / COUNT(DISTINCT link), 1),\n    SUM(ast),\n    ROUND(SUM(ast)::numeric / COUNT(DISTINCT link), 1),\n    SUM(stl),\n    SUM(blk),\n    SUM(tov),\n    ROUND(SUM(two_p)::numeric / NULLIF(SUM(two_pa), 0) * 100, 1),\n    ROUND(SUM(three_p)::numeric / NULLIF(SUM(three_pa), 0) * 100, 1),\n    ROUND(SUM(ft)::numeric / NULLIF(SUM(fta), 0) * 100, 1),\n    ROUND(SUM(split_part(minutes, ':', 1)::numeric + split_part(minutes, ':', 2)::numeric / 60.0), 1)\n  FROM bronze.b_el_boxscore\n  WHERE date >= '2023-07-15' AND date < '2026-07-15'\n    AND UPPER(player_name) ILIKE 'OBST, ANDREAS%'\n) AS combined\nORDER BY CASE saison\n  WHEN '2023-2024' THEN 1\n  WHEN '2024-2025' THEN 2\n  WHEN '2025-2026' THEN 3\n  ELSE 4\nEND",
+    "tables": [
+      "bronze.b_el_boxscore"
+    ],
+    "tags": [
+      "player",
+      "euroleague"
+    ],
+    "doc": "nan"
   }
 ]
