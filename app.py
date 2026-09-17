@@ -924,19 +924,27 @@ def prioritize_chart_options(options: list[str], question: str | None) -> list[s
 
 
 def requested_chart_name(question: str | None) -> str | None:
-    """Infer the chart type requested by the user's prompt."""
+    """Infer the chart type requested by the user's prompt.
+
+    Short English keywords ("pie", "bar", "line") are matched with word
+    boundaries, not raw substring containment - a naive "pie" in lowered
+    matches inside German "Spieler" (player), which previously made any
+    "...EuroLeague-Spieler..." bar-chart question silently open on the Pie
+    tab instead. The longer German compound words (Balkendiagramm etc.) are
+    specific enough that substring matching stays safe for them.
+    """
     if not question:
         return None
     lowered = question.lower()
-    if "scatter" in lowered or "streu" in lowered:
+    if re.search(r"\bscatter\b", lowered) or "streu" in lowered:
         return "Scatter"
-    if "line" in lowered or "linien" in lowered or "verlauf" in lowered:
+    if re.search(r"\bline\b", lowered) or "linien" in lowered or "verlauf" in lowered:
         return "Line"
     if "histogram" in lowered:
         return "Histogram"
-    if "pie" in lowered or "kreisdiagramm" in lowered or "tortendiagramm" in lowered or "kuchendiagramm" in lowered:
+    if re.search(r"\bpie\b", lowered) or "kreisdiagramm" in lowered or "tortendiagramm" in lowered or "kuchendiagramm" in lowered:
         return "Pie"
-    if "bar" in lowered or "balken" in lowered:
+    if re.search(r"\bbar\b", lowered) or "balken" in lowered:
         return "Bar"
     return None
 

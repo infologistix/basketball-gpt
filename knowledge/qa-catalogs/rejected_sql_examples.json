@@ -183,7 +183,7 @@
     "doc": "Saved from user feedback as a rejected SQL example.",
     "source": "streamlit_feedback",
     "created_at": "2026-08-28T21:37:22.991024+00:00",
-    "reason": "\"Andreas Obst\" matcht nie player_name in bronze.b_bbl_boxscore, weil dort \"Obst A. (SG)\" steht - Nachname zuerst, abgekuerzter Vorname, Positions- Suffix in Klammern, kein Leerzeichen-getrennter Vollname. ILIKE '%Andreas Obst%' gibt deshalb garantiert 0 Zeilen, nicht \"keine Daten vorhanden\" - der Spieler hat 30 Spiele in der Saison 2025-2026. Um einen vollstaendig getippten Namen gegen b_bbl_boxscore zu matchen, zuerst Vor- und Nachname trennen und gegen \"Nachname V.\" suchen (z.B. WHERE player_name ILIKE 'Obst A%'), oder ueber b_bbl_player_info aufloesen (UPPER(player_name) dort ist Vollname ohne Kommas) und per player_name_short-Bridge zu boxscore verbinden, wie in der bereits dokumentierten BBL-Namens-Join-Regel beschrieben."
+    "reason": "Dieser Eintrag wurde ursprunglich mit einer falschen Begruendung abgelehnt - die Behauptung, player_name in bronze.b_bbl_boxscore stehe als \"Obst A. (SG)\" (Nachname zuerst, abgekuerzter Vorname, Positions-Suffix in Klammern), ist nicht durch echte Daten gedeckt: verifiziert gegen die Live-Datenbank steht dort \"Andreas Obst\" (Vor- und Nachname, kein Klammer-Suffix), wie bei 0 von 23.465 Zeilen in bronze.b_bbl_boxscore insgesamt. Die urspruengliche SQL (WHERE player_name ILIKE '%Andreas Obst%') war korrekt formatiert und haette funktioniert - der eigentliche Fehler lag vermutlich an anderer Stelle, nicht am Namensformat. Nicht als Beispiel fuer falsche Namens-Formatierung verwenden."
   },
   {
     "question": "Zeig mir als Balkendiagramm die zehn BBL-Spieler mit der besten Freiwurfquote in der Saison 2025–2026.",
