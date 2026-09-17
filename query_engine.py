@@ -500,27 +500,81 @@ def has_draw_visualization_intent(question: str | None) -> bool:
     return any(word in normalized for word in draw_words + visualization_words)
 
 
-_schema_prompt_cache: dict[str | None, tuple[float, str]] = {}
+_schema_prompt_cache: dict[tuple[str | None, frozenset[str]], tuple[float, str]] = {}
 _schema_prompt_cache_lock = threading.Lock()
 
 
-def get_schema_prompt(db_path: str | None = None) -> str:
+# League detection for schema-prompt scoping: the {tables} section lists all
+# 52 tables across 4 leagues on every call, even though a question naming one
+# league only ever needs that league's tables plus the handful of shared ones.
+# Keyword-based and deliberately conservative - ambiguous or multi-league
+# questions fall back to the full, unscoped schema rather than risk excluding
+# a table the LLM actually needs. This does NOT touch the domain-notes prose
+# in SCHEMA_PROMPT_TEMPLATE (the bulk of the prompt) - those notes are dense,
+# hard-won, "verified against live data" correctness fixes, and automatically
+# guessing which ones are "irrelevant" to a league is far riskier than the
+# tokens saved, so they are always sent in full.
+LEAGUE_TABLE_MARKERS: dict[str, tuple[str, ...]] = {
+    "bbl": ("_bbl_", "_bbl"),
+    "cl": ("_cl_", "_cl", "championsleague"),
+    "ec": ("_ec_", "_ec", "eurocup"),
+    "el": ("_el_", "_el", "euroleague"),
+}
+LEAGUE_QUESTION_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "bbl": ("bbl", "bundesliga"),
+    "cl": ("champions league", "champions-league", "championsleague"),
+    "ec": ("eurocup", "euro cup"),
+    "el": ("euroleague", "euro league"),
+}
+# Tables with no league marker in their name at all (seasons) or that
+# deliberately span every league (the unified player-profile view) - always
+# included regardless of which league(s) a question mentions.
+SHARED_TABLE_NAMES = {"silver.seasons", "gold.g_player_profile"}
+
+
+def detect_leagues(question: str | None) -> frozenset[str]:
+    """Return league codes ('bbl'/'cl'/'ec'/'el') clearly named in a question.
+
+    Empty result means "ambiguous or none found" - callers should treat that
+    as "use the full schema", not "use zero tables".
+    """
+    if not question:
+        return frozenset()
+    lowered = question.lower()
+    return frozenset(
+        code
+        for code, keywords in LEAGUE_QUESTION_KEYWORDS.items()
+        if any(keyword in lowered for keyword in keywords)
+    )
+
+
+def _table_matches_league(qualified_name: str, code: str) -> bool:
+    name = qualified_name.lower()
+    return any(marker in name for marker in LEAGUE_TABLE_MARKERS[code])
+
+
+def get_schema_prompt(db_path: str | None = None, question: str | None = None) -> str:
     """Build the LLM system prompt from live database schema metadata.
 
-    Cached per db_path for SCHEMA_PROMPT_CACHE_TTL_SECONDS - see the constant's
-    comment for why. Bypass with clear_schema_prompt_cache() right after a
-    migration if the running pod needs the new schema before the TTL expires.
+    Cached per (db_path, detected leagues) for SCHEMA_PROMPT_CACHE_TTL_SECONDS -
+    see the constant's comment for why. Bypass with clear_schema_prompt_cache()
+    right after a migration if the running pod needs the new schema before the
+    TTL expires. `question` is optional and only narrows the {tables} listing
+    (see detect_leagues) - omitting it (or an ambiguous question) always falls
+    back to the full, unscoped schema.
     """
+    leagues = detect_leagues(question)
+    cache_key = (db_path, leagues)
     now = time.monotonic()
     with _schema_prompt_cache_lock:
-        cached = _schema_prompt_cache.get(db_path)
+        cached = _schema_prompt_cache.get(cache_key)
         if cached is not None and now - cached[0] < SCHEMA_PROMPT_CACHE_TTL_SECONDS:
             return cached[1]
 
-    prompt = _fetch_schema_prompt(db_path)
+    prompt = _fetch_schema_prompt(db_path, leagues=leagues)
 
     with _schema_prompt_cache_lock:
-        _schema_prompt_cache[db_path] = (now, prompt)
+        _schema_prompt_cache[cache_key] = (now, prompt)
     return prompt
 
 
@@ -530,8 +584,13 @@ def clear_schema_prompt_cache() -> None:
         _schema_prompt_cache.clear()
 
 
-def _fetch_schema_prompt(db_path: str | None) -> str:
-    """Build the LLM system prompt from a live database schema query."""
+def _fetch_schema_prompt(db_path: str | None, leagues: frozenset[str] = frozenset()) -> str:
+    """Build the LLM system prompt from a live database schema query.
+
+    When `leagues` is non-empty, the {tables} listing (and the relationship
+    notes derived from it) is narrowed to those leagues' tables plus the
+    always-shared ones - see LEAGUE_TABLE_MARKERS/SHARED_TABLE_NAMES above.
+    """
     schemas = get_schemas()
     default_schema = get_default_schema()
     try:
@@ -542,6 +601,17 @@ def _fetch_schema_prompt(db_path: str | None) -> str:
     except PostgresError as exc:
         message = str(exc).strip() or exc.__class__.__name__
         raise QueryEngineError(f"PostgreSQL error while reading schema: {message}") from exc
+
+    if leagues:
+        rows = [
+            row
+            for row in rows
+            if f"{row['table_schema']}.{row['table_name']}" in SHARED_TABLE_NAMES
+            or any(
+                _table_matches_league(f"{row['table_schema']}.{row['table_name']}", code)
+                for code in leagues
+            )
+        ]
 
     if not rows:
         table_text = "(No tables found.)"
@@ -673,7 +743,7 @@ def estimate_context_breakdown(
     if rejected_context:
         base_parts.append(rejected_context)
     base_parts.append(f"Question: {question}")
-    base_text = get_schema_prompt(db_path=db_path) + "\n\n" + "\n\n".join(base_parts)
+    base_text = get_schema_prompt(db_path=db_path, question=question) + "\n\n" + "\n\n".join(base_parts)
 
     base_tokens = estimate_tokens(base_text)
     history_tokens = estimate_tokens(history_context) if history_context else 0
@@ -724,7 +794,7 @@ def generate_sql(
     prompt_parts.append(f"Question: {question}")
     response = generate_text(
         prompt="\n\n".join(prompt_parts),
-        system=get_schema_prompt(db_path=db_path),
+        system=get_schema_prompt(db_path=db_path, question=question),
         provider=provider,
         gemini_api_key=gemini_api_key,
         ollama_api_key=ollama_api_key,
@@ -779,7 +849,7 @@ PostgreSQL error:
 """.strip()
     response = generate_text(
         prompt=prompt,
-        system=get_schema_prompt(db_path=db_path),
+        system=get_schema_prompt(db_path=db_path, question=question),
         provider=provider,
         gemini_api_key=gemini_api_key,
         ollama_api_key=ollama_api_key,
